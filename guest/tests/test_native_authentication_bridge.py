@@ -76,7 +76,7 @@ class NativeAuthenticationProtocolTests(unittest.TestCase):
         cls.keys.cleanup()
 
     def request(self, operation: str = "sudo") -> dict[str, object]:
-        if operation == "enroll":
+        if operation in {"disable", "enroll"}:
             user = requesting_user = tty = ""
         else:
             user = requesting_user = "test"
@@ -91,7 +91,7 @@ class NativeAuthenticationProtocolTests(unittest.TestCase):
             "tty": tty,
             "type": "authorize",
             "user": user,
-            "version": 2,
+            "version": 3,
         }
 
     def approved_response(
@@ -142,6 +142,26 @@ class NativeAuthenticationProtocolTests(unittest.TestCase):
         with self.assertRaises(broker.AuthorizationError):
             broker.validate_request(request)
 
+    def test_disable_response_is_nonauthorizing_and_exact(self) -> None:
+        request = self.request("disable")
+        response = {
+            **request,
+            "type": "authorization-result",
+            "approved": True,
+            "issuedAt": 0,
+            "expiresAt": 0,
+            "keyId": "",
+            "publicKey": "",
+            "signature": "",
+        }
+        decoded = broker.decode_response(json.dumps(response).encode(), request)
+        broker.verify_disable_response(decoded)
+
+        authorization_material = dict(response)
+        authorization_material["keyId"] = "ab" * 32
+        with self.assertRaises(broker.AuthorizationError):
+            broker.decode_response(json.dumps(authorization_material).encode(), request)
+
     def test_response_requires_the_original_request_identity(self) -> None:
         request = self.request()
         response = self.approved_response(request)
@@ -150,6 +170,7 @@ class NativeAuthenticationProtocolTests(unittest.TestCase):
         for field, value in (
             ("requestId", "33333333-3333-4333-8333-333333333333"),
             ("challenge", "cd" * 32),
+            ("guestId", "dc" * 32),
             ("tty", "/dev/pts/5"),
             ("user", "root"),
         ):
@@ -207,6 +228,37 @@ class NativeAuthenticationProtocolTests(unittest.TestCase):
             )
             value = json.loads(path.read_text())
             self.assertEqual(set(value), broker.STATE_FIELDS)
+            broker.remove_state(path, enforce_root_owner=False)
+            self.assertFalse(path.exists())
+            broker.remove_state(path, enforce_root_owner=False)
+
+    def test_version_two_enrollment_state_migrates_without_changing_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state" / "native-authentication.json"
+            broker.save_state(
+                self.public_key,
+                self.guest_id,
+                path,
+                enforce_root_owner=False,
+            )
+            legacy = json.loads(path.read_text(encoding="ascii"))
+            legacy["version"] = 2
+            path.write_text(json.dumps(legacy, sort_keys=True) + "\n", encoding="ascii")
+            path.chmod(0o600)
+
+            with self.assertRaises(broker.AuthorizationError):
+                broker.load_state(path, enforce_root_owner=False)
+            self.assertTrue(broker.migrate_state(path, enforce_root_owner=False))
+            self.assertEqual(
+                broker.load_state(path, enforce_root_owner=False),
+                (self.public_key, self.guest_id),
+            )
+            self.assertEqual(json.loads(path.read_text(encoding="ascii"))["version"], 3)
+
+    def test_state_migration_is_a_noop_when_not_enrolled(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state" / "native-authentication.json"
+            self.assertFalse(broker.migrate_state(path, enforce_root_owner=False))
 
     def test_fragmented_signed_round_trip(self) -> None:
         request = self.request()

@@ -64,7 +64,7 @@ is reading the camera. Camera permission, capture failure, or device removal is
 non-fatal to the VM; the launcher can restart the optional bridge without
 restarting Omarchy.
 
-An experimental root-only authentication port
+A root-only authentication port
 (`dev.tryomarchy.authentication`) lets the guest's `sudo` PAM policy request a
 fixed-purpose macOS Touch ID prompt. Enrollment creates a non-exportable P-256
 signing key in the Mac's Secure Enclave for a root-private random guest ID and
@@ -77,13 +77,22 @@ user, `sudo` service, interactive TTY, guest ID, signing-key ID, and a 15-second
 window. The guest verifies that signature with OpenSSL before PAM can return
 success. It never accepts an unsigned approval boolean.
 
+The integration's binaries and root-only device rule are present in the factory
+image, but the sudo PAM policy remains unchanged until the user opts in through
+**Setup → Security → Touch ID for sudo**. The root control enrolls first and
+atomically adds the PAM rule only after successful guest-password and Touch ID
+authentication. Disable removes that exact rule before deleting guest state and
+requesting deletion of the corresponding host key representation. Re-pair runs
+the disable and enable transitions while preserving password fallback.
+
 The QEMU window must be frontmost, the QEMU process identity must still match,
-and the host owns both enrollment and sudo prompt text. The PAM module is
-`sufficient`: a denial, missing enrollment, unavailable bridge, invalid
-signature, non-interactive request, or timeout falls through to Omarchy's
-normal password authentication. This prototype does not authenticate login or
-screen-unlock flows, cannot bind approval to the exact sudo command because PAM
-does not expose it, and is not a general guest-to-host approval service.
+and the host owns both enrollment and sudo prompt text. When enabled, the PAM
+module is `sufficient`: a denial, missing enrollment, unavailable bridge,
+invalid signature, non-interactive request, or timeout falls through to
+Omarchy's normal password authentication. This integration does not authenticate
+login or screen-unlock flows, cannot bind approval to the exact sudo command
+because PAM does not expose it, and is not a general guest-to-host approval
+service.
 
 When a folder is chosen on the start menu, QEMU exports it over virtio-9p with
 `security_model=none`, so every host file operation runs as the Mac user and

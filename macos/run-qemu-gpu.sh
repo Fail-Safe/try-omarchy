@@ -361,7 +361,7 @@ runtime = exact_keys(
     spec.get("runtime"),
     {
         "audio",
-        "authenticationExperiment",
+        "authentication",
         "camera",
         "clipboard",
         "compressedDisk",
@@ -405,6 +405,7 @@ clipboard = {
     "formats": ["text/plain;charset=utf-8", "image/png"],
 }
 authentication = {
+    "activation": "explicit-menu-opt-in",
     "approvalLifetimeSeconds": 15,
     "authorizationScope": "sudo-authentication",
     "device": "virtserialport",
@@ -413,7 +414,7 @@ authentication = {
     "hostKey": "per-guest-secure-enclave-p256",
     "pamService": "sudo",
     "port": "dev.tryomarchy.authentication",
-    "protocolVersion": 2,
+    "protocolVersion": 3,
     "requiresEnrollment": True,
     "signature": "ecdsa-p256-sha256",
 }
@@ -493,7 +494,7 @@ if (
     or runtime.get("camera") != camera
     or runtime.get("storage") != storage
     or runtime.get("clipboard") != clipboard
-    or runtime.get("authenticationExperiment") != authentication
+    or runtime.get("authentication") != authentication
     or runtime.get("sharedFolder") != shared_folder
     or runtime.get("devices") != expected_devices
     or runtime.get("minimumMemoryMiB") != 2048

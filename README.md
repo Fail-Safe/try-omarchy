@@ -249,24 +249,34 @@ Loopback binding prevents devices on Wi-Fi, Ethernet, or the wider LAN from
 connecting. It does not isolate the listener from other users or processes on
 the same Mac; guest SSH authentication is still required.
 
-### Experimental Touch ID for sudo
+### Touch ID for sudo
 
-The experimental native authentication bridge can enroll this Mac and use
-Touch ID as a sufficient authentication method for guest `sudo`:
+The native authentication bridge can enroll this Mac and use
+Touch ID as a sufficient authentication method for guest `sudo`. Open
+**Omarchy Menu → Setup → Security → Touch ID for sudo**, or run:
 
 ```sh
-try-omarchy-touch-id-enroll
-try-omarchy-touch-id-test
+try-omarchy-touch-id
 ```
 
-Enrollment requires the normal guest sudo path once, then pins a public key for
-a Touch ID-protected Secure Enclave signing key. The Mac stores only the
-Secure Enclave's device-bound encrypted key representation. Every later approval is signed
-over a root-private guest ID, fresh challenge, the sudo user and requesting user,
-the interactive TTY, and a 15-second validity window. Each enrolled guest has a
-distinct host signing key. The QEMU window must be frontmost. Cancellation,
-invalid responses, missing enrollment, and unavailable Touch ID all fall back
-to the normal guest password; no login or screen-unlock PAM policy is changed.
+The integration ships disabled. Enabling first requires the normal guest sudo
+password, then Touch ID creates and proves possession of a Secure Enclave
+signing key. Only after that succeeds is the narrowly scoped sudo PAM rule
+installed. The menu then offers Test, Re-pair, and Disable actions.
+
+The Mac stores only the Secure Enclave's device-bound encrypted key
+representation. Every later approval is signed over a root-private guest ID,
+fresh challenge, the sudo user and requesting user, the interactive TTY, and a
+15-second validity window. Each enrolled guest has a distinct host signing key.
+The QEMU window must be frontmost. Cancellation, invalid responses, missing
+enrollment, and unavailable Touch ID all fall back to the normal guest password;
+no login or screen-unlock PAM policy is changed.
+
+Enrollment persists across guest and Mac restarts for the same persistent VM,
+Mac, and macOS account. Factory Reset, moving the VM to another Mac or account,
+or changing the enrolled Touch ID fingerprint set requires re-pairing. Disabling
+removes the guest enrollment and, while the host bridge is available, its wrapped
+Secure Enclave key representation.
 
 ## Requirements
 

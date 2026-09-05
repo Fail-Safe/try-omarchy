@@ -3,12 +3,12 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: install-touch-id-sudo-prototype.sh [--root ROOT] [--guest-dir GUEST_DIR]" >&2
+  echo "Usage: install-touch-id-sudo.sh [--root ROOT] [--guest-dir GUEST_DIR]" >&2
   exit 64
 }
 
 fail() {
-  echo "install-touch-id-sudo-prototype: $*" >&2
+  echo "install-touch-id-sudo: $*" >&2
   exit 1
 }
 
@@ -34,7 +34,6 @@ while (($#)); do
   esac
 done
 
-(( EUID == 0 )) || fail "run as root"
 [[ $root == /* ]] || fail "--root must be absolute"
 if [[ $root != / ]]; then
   case "$root" in
@@ -45,6 +44,7 @@ if [[ $root != / ]]; then
   [[ -d $root ]] || fail "staged root does not exist: $root"
   root=${root%/}
 else
+  (( EUID == 0 )) || fail "run as root"
   root=
 fi
 [[ -d $guest_dir/native-overlay ]] || fail "guest overlay not found: $guest_dir"
@@ -52,8 +52,11 @@ fi
 broker_source="$guest_dir/native-overlay/usr/local/lib/try-omarchy/native-authentication-broker"
 enroll_source="$guest_dir/native-overlay/usr/local/sbin/try-omarchy-touch-id-enroll"
 test_source="$guest_dir/native-overlay/usr/local/bin/try-omarchy-touch-id-test"
+menu_source="$guest_dir/native-overlay/usr/local/bin/try-omarchy-touch-id"
+control_source="$guest_dir/native-overlay/usr/local/sbin/try-omarchy-touch-id-control"
 rule_source="$guest_dir/native-overlay/etc/udev/rules.d/93-omarchy-native-authentication.rules"
-for source_file in "$broker_source" "$enroll_source" "$test_source" "$rule_source"; do
+menu_installer_source="$guest_dir/scripts/install-touch-id-menu-entry.py"
+for source_file in "$broker_source" "$enroll_source" "$test_source" "$menu_source" "$control_source" "$rule_source" "$menu_installer_source"; do
   [[ -f $source_file && ! -L $source_file ]] || fail "unsafe or missing source: $source_file"
 done
 
@@ -70,40 +73,31 @@ install -m 0755 "$broker_source" \
   "$root/usr/local/lib/try-omarchy/native-authentication-broker"
 install -m 0755 "$enroll_source" "$root/usr/local/sbin/try-omarchy-touch-id-enroll"
 install -m 0755 "$test_source" "$root/usr/local/bin/try-omarchy-touch-id-test"
+install -m 0755 "$menu_source" "$root/usr/local/bin/try-omarchy-touch-id"
+install -m 0755 "$control_source" "$root/usr/local/sbin/try-omarchy-touch-id-control"
 install -m 0644 "$rule_source" \
   "$root/etc/udev/rules.d/93-omarchy-native-authentication.rules"
 
-sudo_pam="$root/etc/pam.d/sudo"
-[[ -f $sudo_pam && ! -L $sudo_pam ]] || fail "sudo PAM policy is missing or unsafe"
-[[ $(sed -n '1p' "$sudo_pam") == '#%PAM-1.0' ]] || fail "unexpected sudo PAM policy header"
-pam_command=/usr/local/lib/try-omarchy/native-authentication-broker
-pam_line=$'auth\t\tsufficient\tpam_exec.so quiet seteuid /usr/local/lib/try-omarchy/native-authentication-broker pam'
-if grep -Fq "$pam_command" "$sudo_pam"; then
-  grep -Fxq "$pam_line" "$sudo_pam" || fail "sudo PAM policy contains a different authentication broker rule"
-else
-  if [[ -z $root ]]; then
-    backup=/etc/pam.d/sudo.try-omarchy-before-touch-id
-    [[ -e $backup || -L $backup ]] || install -m 0644 "$sudo_pam" "$backup"
-  fi
-  pam_directory=$(dirname "$sudo_pam")
-  temporary=$(mktemp "$pam_directory/.sudo.touch-id.XXXXXX")
-  cleanup() {
-    rm -f -- "$temporary"
-  }
-  trap cleanup EXIT
-  awk -v line="$pam_line" 'NR == 1 { print; print line; next } { print }' \
-    "$sudo_pam" >"$temporary"
-  chown --reference="$sudo_pam" "$temporary"
-  chmod --reference="$sudo_pam" "$temporary"
-  mv -f -- "$temporary" "$sudo_pam"
-  trap - EXIT
-fi
-
 if [[ -z $root ]]; then
+  if ! /usr/local/lib/try-omarchy/native-authentication-broker migrate; then
+    /usr/local/sbin/try-omarchy-touch-id-control disable || true
+    fail "existing Touch ID state could not be migrated; sudo authentication was disabled"
+  fi
   /usr/bin/udevadm control --reload-rules
   /usr/bin/udevadm trigger --subsystem-match=virtio-ports --action=change
+  if [[ ${SUDO_USER:-root} != root ]]; then
+    [[ ${SUDO_USER:-} =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || fail "unsafe invoking user"
+    account=$(getent passwd "$SUDO_USER") || fail "cannot resolve invoking user"
+    IFS=: read -r _ _ account_uid _ _ account_home _ <<<"$account"
+    [[ $account_uid == "${SUDO_UID:-}" ]] || fail "invoking user identity changed"
+    [[ $account_home == /* && $account_home != / ]] || fail "unsafe invoking user home"
+    runuser --user "$SUDO_USER" -- \
+      "$menu_installer_source" \
+      "$account_home/.config/omarchy/extensions/omarchy-menu.jsonc"
+    runuser --user "$SUDO_USER" -- /usr/bin/omarchy menu refresh >/dev/null 2>&1 || true
+  fi
 fi
 
-echo "Installed the sudo-only Touch ID prototype."
-echo "Enroll with: try-omarchy-touch-id-enroll"
+echo "Installed the opt-in Touch ID sudo integration."
+echo "Enable with: try-omarchy-touch-id"
 echo "Test with:   try-omarchy-touch-id-test"

@@ -1,9 +1,3 @@
 #!/bin/sh
 
-set -eu
-
-broker=/usr/local/lib/try-omarchy/native-authentication-broker
-if [ "$(id -u)" -eq 0 ]; then
-  exec "$broker" enroll
-fi
-exec sudo "$broker" enroll
+exec /usr/local/bin/try-omarchy-touch-id enable

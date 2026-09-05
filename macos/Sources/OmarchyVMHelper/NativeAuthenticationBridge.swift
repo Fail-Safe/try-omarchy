@@ -6,11 +6,14 @@ import LocalAuthentication
 import Security
 
 enum NativeAuthenticationOperation: String, Equatable {
+    case disable
     case enroll
     case sudo
 
     var localizedReason: String {
         switch self {
+        case .disable:
+            "Disable Touch ID for sudo in this Try Omarchy guest"
         case .enroll:
             "Pair this Try Omarchy guest for Touch ID sudo testing"
         case .sudo:
@@ -21,7 +24,7 @@ enum NativeAuthenticationOperation: String, Equatable {
 
 struct NativeAuthenticationRequest: Equatable {
     static let maximumLineBytes = 4096
-    static let protocolVersion = 2
+    static let protocolVersion = 3
 
     let operation: NativeAuthenticationOperation
     let guestID: String
@@ -58,9 +61,9 @@ struct NativeAuthenticationRequest: Equatable {
         }
 
         switch operation {
-        case .enroll:
+        case .disable, .enroll:
             guard user.isEmpty, requestingUser.isEmpty, tty.isEmpty else {
-                throw HelperError.io("guest sent an invalid enrollment request")
+                throw HelperError.io("guest sent an invalid authentication control request")
             }
         case .sudo:
             guard isAccountName(user),
@@ -84,7 +87,7 @@ struct NativeAuthenticationRequest: Equatable {
 
     func signaturePayload(issuedAt: Int64, expiresAt: Int64, keyID: String) -> Data {
         let fields = [
-            "try-omarchy-native-authentication-v2",
+            "try-omarchy-native-authentication-v3",
             guestID,
             operation.rawValue,
             requestID,
@@ -138,7 +141,20 @@ struct NativeAuthenticationApproval: Equatable {
 
 struct NativeAuthenticationResponse: Equatable {
     let request: NativeAuthenticationRequest
+    let approved: Bool
     let approval: NativeAuthenticationApproval?
+
+    init(request: NativeAuthenticationRequest, approval: NativeAuthenticationApproval?) {
+        self.request = request
+        self.approved = approval != nil
+        self.approval = approval
+    }
+
+    init(disabledRequest request: NativeAuthenticationRequest) {
+        self.request = request
+        self.approved = true
+        self.approval = nil
+    }
 
     func encode() throws -> Data {
         let object: [String: Any] = [
@@ -152,7 +168,7 @@ struct NativeAuthenticationResponse: Equatable {
             "requestingUser": request.requestingUser,
             "service": request.service,
             "tty": request.tty,
-            "approved": approval != nil,
+            "approved": approved,
             "issuedAt": approval?.issuedAt ?? 0,
             "expiresAt": approval?.expiresAt ?? 0,
             "keyId": approval?.keyID ?? "",
@@ -167,6 +183,7 @@ struct NativeAuthenticationResponse: Equatable {
 
 protocol HostAuthorizationSigning: AnyObject {
     func authorize(_ request: NativeAuthenticationRequest) throws -> NativeAuthenticationApproval?
+    func disable(guestID: String) throws
     func cancel()
 }
 
@@ -194,6 +211,9 @@ final class SecureEnclaveAuthorizationSigner: HostAuthorizationSigning, @uncheck
         }
         let keyURL = keyURL(for: request.guestID)
         let keyAlreadyExists = try keyExists(at: keyURL)
+        if request.operation == .disable {
+            throw HelperError.io("disable request reached the signing path")
+        }
         if request.operation == .sudo && !keyAlreadyExists {
             fputs("[authentication-bridge] Touch ID sudo is not enrolled for this Mac.\n", stderr)
             return nil
@@ -238,6 +258,14 @@ final class SecureEnclaveAuthorizationSigner: HostAuthorizationSigning, @uncheck
             publicKey: publicKeyData,
             signature: signature
         )
+    }
+
+    func disable(guestID: String) throws {
+        let keyURL = keyURL(for: guestID)
+        guard try keyExists(at: keyURL) else { return }
+        guard Darwin.unlink(keyURL.path) == 0 else {
+            throw HelperError.io("cannot remove Secure Enclave key representation")
+        }
     }
 
     func cancel() {
@@ -484,6 +512,26 @@ final class NativeAuthenticationBridge {
 
     private func handle(_ data: Data) throws {
         let request = try NativeAuthenticationRequest.decode(data)
+        if request.operation == .disable {
+            var disabled = false
+            if processAlive(), focusProbe() {
+                do {
+                    try signer.disable(guestID: request.guestID)
+                    disabled = true
+                } catch {
+                    fputs("[authentication-bridge] \(error.localizedDescription)\n", stderr)
+                }
+            }
+            let response = disabled
+                ? NativeAuthenticationResponse(disabledRequest: request)
+                : NativeAuthenticationResponse(request: request, approval: nil)
+            try NativeBridgeSocket.writeAll(
+                response.encode(),
+                to: descriptor,
+                label: "authentication"
+            )
+            return
+        }
         var approval: NativeAuthenticationApproval?
         if processAlive(), focusProbe() {
             do {

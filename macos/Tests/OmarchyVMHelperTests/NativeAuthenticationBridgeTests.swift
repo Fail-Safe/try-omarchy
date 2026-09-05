@@ -11,7 +11,7 @@ struct NativeAuthenticationBridgeTests {
     @Test("sudo requests use a strict versioned context")
     func sudoRequestSchema() throws {
         let line = Data(
-            #"{"challenge":"\#(challenge)","guestId":"\#(guestID)","operation":"sudo","requestId":"\#(requestID)","requestingUser":"test","service":"sudo","tty":"/dev/pts/4","type":"authorize","user":"test","version":2}"#.utf8
+            #"{"challenge":"\#(challenge)","guestId":"\#(guestID)","operation":"sudo","requestId":"\#(requestID)","requestingUser":"test","service":"sudo","tty":"/dev/pts/4","type":"authorize","user":"test","version":3}"#.utf8
         )
         #expect(
             try NativeAuthenticationRequest.decode(line)
@@ -31,12 +31,12 @@ struct NativeAuthenticationBridgeTests {
     @Test("enrollment cannot smuggle sudo context")
     func enrollmentSchema() throws {
         let valid = Data(
-            #"{"challenge":"\#(challenge)","guestId":"\#(guestID)","operation":"enroll","requestId":"\#(requestID)","requestingUser":"","service":"sudo","tty":"","type":"authorize","user":"","version":2}"#.utf8
+            #"{"challenge":"\#(challenge)","guestId":"\#(guestID)","operation":"enroll","requestId":"\#(requestID)","requestingUser":"","service":"sudo","tty":"","type":"authorize","user":"","version":3}"#.utf8
         )
         #expect(try NativeAuthenticationRequest.decode(valid).operation == .enroll)
 
         let invalid = Data(
-            #"{"challenge":"\#(challenge)","guestId":"\#(guestID)","operation":"enroll","requestId":"\#(requestID)","requestingUser":"test","service":"sudo","tty":"","type":"authorize","user":"test","version":2}"#.utf8
+            #"{"challenge":"\#(challenge)","guestId":"\#(guestID)","operation":"enroll","requestId":"\#(requestID)","requestingUser":"test","service":"sudo","tty":"","type":"authorize","user":"test","version":3}"#.utf8
         )
         #expect(throws: HelperError.self) {
             try NativeAuthenticationRequest.decode(invalid)
@@ -47,12 +47,12 @@ struct NativeAuthenticationBridgeTests {
     func invalidRequests() {
         for line in [
             "not json",
-            #"{"challenge":"short","guestId":"\#(guestID)","operation":"sudo","requestId":"\#(requestID)","requestingUser":"test","service":"sudo","tty":"/dev/pts/1","type":"authorize","user":"test","version":2}"#,
-            #"{"challenge":"\#(challenge)","guestId":"short","operation":"sudo","requestId":"\#(requestID)","requestingUser":"test","service":"sudo","tty":"/dev/pts/1","type":"authorize","user":"test","version":2}"#,
-            #"{"challenge":"\#(challenge)","guestId":"\#(guestID)","operation":"sudo","requestId":"not-a-uuid","requestingUser":"test","service":"sudo","tty":"/dev/pts/1","type":"authorize","user":"test","version":2}"#,
-            #"{"challenge":"\#(challenge)","guestId":"\#(guestID)","operation":"sudo","requestId":"\#(requestID)","requestingUser":"test","service":"login","tty":"/dev/pts/1","type":"authorize","user":"test","version":2}"#,
-            #"{"challenge":"\#(challenge)","guestId":"\#(guestID)","operation":"sudo","requestId":"\#(requestID)","requestingUser":"test","service":"sudo","tty":"unknown","type":"authorize","user":"test","version":2}"#,
-            #"{"challenge":"\#(challenge)","extra":true,"guestId":"\#(guestID)","operation":"sudo","requestId":"\#(requestID)","requestingUser":"test","service":"sudo","tty":"/dev/pts/1","type":"authorize","user":"test","version":2}"#,
+            #"{"challenge":"short","guestId":"\#(guestID)","operation":"sudo","requestId":"\#(requestID)","requestingUser":"test","service":"sudo","tty":"/dev/pts/1","type":"authorize","user":"test","version":3}"#,
+            #"{"challenge":"\#(challenge)","guestId":"short","operation":"sudo","requestId":"\#(requestID)","requestingUser":"test","service":"sudo","tty":"/dev/pts/1","type":"authorize","user":"test","version":3}"#,
+            #"{"challenge":"\#(challenge)","guestId":"\#(guestID)","operation":"sudo","requestId":"not-a-uuid","requestingUser":"test","service":"sudo","tty":"/dev/pts/1","type":"authorize","user":"test","version":3}"#,
+            #"{"challenge":"\#(challenge)","guestId":"\#(guestID)","operation":"sudo","requestId":"\#(requestID)","requestingUser":"test","service":"login","tty":"/dev/pts/1","type":"authorize","user":"test","version":3}"#,
+            #"{"challenge":"\#(challenge)","guestId":"\#(guestID)","operation":"sudo","requestId":"\#(requestID)","requestingUser":"test","service":"sudo","tty":"unknown","type":"authorize","user":"test","version":3}"#,
+            #"{"challenge":"\#(challenge)","extra":true,"guestId":"\#(guestID)","operation":"sudo","requestId":"\#(requestID)","requestingUser":"test","service":"sudo","tty":"/dev/pts/1","type":"authorize","user":"test","version":3}"#,
         ] {
             #expect(throws: HelperError.self) {
                 try NativeAuthenticationRequest.decode(Data(line.utf8))
@@ -80,7 +80,7 @@ struct NativeAuthenticationBridgeTests {
             )
                 == Data(
                     [
-                        "try-omarchy-native-authentication-v2",
+                        "try-omarchy-native-authentication-v3",
                         guestID,
                         "sudo",
                         requestID,
@@ -141,12 +141,48 @@ struct NativeAuthenticationBridgeTests {
         #expect(deniedObject["approved"] as? Bool == false)
         #expect(deniedObject["issuedAt"] as? Int == 0)
         #expect(deniedObject["keyId"] as? String == "")
+
+        let disable = NativeAuthenticationRequest(
+            operation: .disable,
+            guestID: guestID,
+            requestID: requestID,
+            challenge: challenge,
+            user: "",
+            requestingUser: "",
+            service: "sudo",
+            tty: ""
+        )
+        let disabled = try NativeAuthenticationResponse(disabledRequest: disable).encode()
+        let disabledObject = try #require(
+            JSONSerialization.jsonObject(with: disabled) as? [String: Any]
+        )
+        #expect(disabledObject["approved"] as? Bool == true)
+        #expect(disabledObject["issuedAt"] as? Int == 0)
+        #expect(disabledObject["keyId"] as? String == "")
     }
 
     @Test("prompt text is fixed by operation and approvals are short-lived")
     func promptPolicy() {
         #expect(NativeAuthenticationOperation.enroll.localizedReason.contains("Pair"))
+        #expect(NativeAuthenticationOperation.disable.localizedReason.contains("Disable"))
         #expect(NativeAuthenticationOperation.sudo.localizedReason.contains("sudo"))
         #expect(SecureEnclaveAuthorizationSigner.approvalLifetimeSeconds == 15)
+    }
+
+    @Test("disable removes only the requested safe key representation")
+    func disableKey() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let key = directory.appendingPathComponent("\(guestID).key")
+        try Data([0x01, 0x02]).write(to: key)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: key.path)
+        let signer = SecureEnclaveAuthorizationSigner(keyDirectory: directory)
+
+        try signer.disable(guestID: guestID)
+        #expect(!FileManager.default.fileExists(atPath: key.path))
+        try signer.disable(guestID: guestID)
     }
 }
