@@ -325,6 +325,34 @@
         ]
       },
       {
+        "id": "battlenet-aarch64-unavailable",
+        "description": "Fail Battle.net Install on aarch64 before umu-launcher/Wine setup (installer-only; not a global wine denylist).",
+        "reference": "https://github.com/basecamp/omarchy/blob/346e69e1cec6c4e8924531874af6ba010a1bc99e/bin/omarchy-install-gaming-battlenet",
+        "patch": "patches/omarchy/battlenet-aarch64-unavailable.patch",
+        "patchSha256": "3d456ecb2858709c122366a4492c22a17684620ed0fa5807d43b9005666dc013",
+        "targets": [
+          {
+            "path": "bin/omarchy-install-gaming-battlenet",
+            "beforeSha256": "7d687f439d9ea1b5de6cc7b5c8c054e8276fe3357e9792a67a6c5304e06dcfbb",
+            "afterSha256": "a4be72fe6162747aa30f9f990e0b1cbb9ace4f7df1d95b84e1b8971e77513d89"
+          }
+        ]
+      },
+      {
+        "id": "lutris-aarch64-unavailable",
+        "description": "Fail Lutris Install on aarch64 before Wine/umu package pulls (installer-only; not a global wine denylist).",
+        "reference": "https://github.com/basecamp/omarchy/blob/346e69e1cec6c4e8924531874af6ba010a1bc99e/bin/omarchy-install-gaming-lutris",
+        "patch": "patches/omarchy/lutris-aarch64-unavailable.patch",
+        "patchSha256": "c4490194aa3e2956c80286807682b0dae1cffb1a2da188d5188c306415574817",
+        "targets": [
+          {
+            "path": "bin/omarchy-install-gaming-lutris",
+            "beforeSha256": "b742e54d9bda2da2a8e98e6b236fcd050302919e4e25836bedf3f8dfcf3edbc8",
+            "afterSha256": "d9e26a186fb6401eea179194ae40119293af7d230a473ec8e34964a1f93732a2"
+          }
+        ]
+      },
+      {
         "id": "aarch64-hide-unavailable-installs",
         "description": "Gate known aarch64-unavailable Install rows behind a hideable visibility helper, and add Setup restore.",
         "reference": "https://github.com/basecamp/omarchy/blob/346e69e1cec6c4e8924531874af6ba010a1bc99e/default/omarchy/omarchy-menu.jsonc",

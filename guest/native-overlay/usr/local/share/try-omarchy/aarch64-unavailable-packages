@@ -2,6 +2,8 @@
 # Format: package<TAB>display-name
 # Includes x86_64-only AUR/binaries, and packages the Install path asks pacman for
 # that are absent from this guest's repos (often AUR / omarchy x86 channel only).
+# Wine/umu are NOT listed here: they are refused only from Battle.net / Lutris
+# installers so aarch64 pkg-add of those deps elsewhere is not blocked.
 ghostty	Ghostty
 microsoft-edge-stable-bin	Edge
 spotify	Spotify
@@ -14,10 +16,6 @@ lmstudio-bin	LM Studio
 steam	Steam
 minecraft-launcher	Minecraft
 heroic-games-launcher-bin	Heroic
-umu-launcher	Wine game launcher
-wine-staging	Wine
-wine-mono	Wine
-wine-gecko	Wine
 sublime-text-4	Sublime Text
 visual-studio-code-bin	VSCode
 zed	Zed
