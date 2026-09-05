@@ -13,7 +13,7 @@ for package in "$@"; do
   [[ -n $package ]] || continue
   name=$(awk -F '\t' -v package="$package" '$1 == package { print $2; exit }' "$map")
   if [[ -n $name ]]; then
-    exec /usr/local/bin/omarchy-pkg-unavailable-arm "$name"
+    exec /usr/local/bin/omarchy-pkg-unavailable-arm "$name" "$package"
   fi
 done
 

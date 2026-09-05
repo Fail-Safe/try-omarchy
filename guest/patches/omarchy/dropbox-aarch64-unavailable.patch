@@ -6,7 +6,7 @@
  
 +# Dropbox ships x86_64-only binaries; refuse before post-install tray setup.
 +if [[ $(uname -m) == aarch64 ]]; then
-+  exec omarchy-pkg-unavailable-arm Dropbox
++  exec omarchy-pkg-unavailable-arm Dropbox dropbox
 +fi
 +
  echo "Installing all dependencies..."

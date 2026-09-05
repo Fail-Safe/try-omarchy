@@ -287,12 +287,12 @@
         "description": "Stop the Dropbox installer on aarch64 before tray setup, using the shared unavailable message.",
         "reference": "https://github.com/basecamp/omarchy/blob/346e69e1cec6c4e8924531874af6ba010a1bc99e/bin/omarchy-install-service-dropbox",
         "patch": "patches/omarchy/dropbox-aarch64-unavailable.patch",
-        "patchSha256": "c97a991a7ced28b0d02ce89497522a50198f6f9744fa5a44213e62c84bc422a5",
+        "patchSha256": "59e0d5159c1b56d443bc13a16b87a86a3366cfc7fc809c58774b115cf377711a",
         "targets": [
           {
             "path": "bin/omarchy-install-service-dropbox",
             "beforeSha256": "90f36082ab995dc5e124996da15d551d058892eedbc7d290c93ded4f495ba6af",
-            "afterSha256": "29b93859659093ef24338ee37136cf12ac61a9abd9dc9e0aa8b76033614be8f7"
+            "afterSha256": "fc0fd7504bcf9c27c05c29f26db9fdb3f1995c7dca5156a9337151f8d1dd17ed"
           }
         ]
       },
@@ -301,12 +301,40 @@
         "description": "Fail GeForce NOW install on aarch64 with the shared pacman/AUR unavailable message (vendor installer is x86_64-only).",
         "reference": "https://github.com/basecamp/omarchy/blob/346e69e1cec6c4e8924531874af6ba010a1bc99e/bin/omarchy-install-gaming-geforce-now",
         "patch": "patches/omarchy/geforce-now-aarch64-unavailable.patch",
-        "patchSha256": "64c3f52d990982c3003040289f91d6b9f718b9ffd3992a72ea6c37e9ad1037bd",
+        "patchSha256": "91c9f9d525b7b691b03cd5449d42c087b1ad52fd4244355469404d8de097da52",
         "targets": [
           {
             "path": "bin/omarchy-install-gaming-geforce-now",
             "beforeSha256": "c039bf511dc66a86af93c52b5445485ee9b592a7f54006e6dcdf637b35f0577c",
-            "afterSha256": "55821a3cc43f9161b58fb27f568cd1c58809e43cb2329f46e613a3c06e0eb884"
+            "afterSha256": "dabbcb2f85d110a1b35315257afb1f4b13acae12f316f27e1765feb448b4ee2f"
+          }
+        ]
+      },
+      {
+        "id": "retroarch-aarch64-unavailable",
+        "description": "Fail the full RetroArch+libretro Install path on aarch64 before pacman target-not-found spam.",
+        "reference": "https://github.com/basecamp/omarchy/blob/346e69e1cec6c4e8924531874af6ba010a1bc99e/bin/omarchy-install-gaming-retroarch",
+        "patch": "patches/omarchy/retroarch-aarch64-unavailable.patch",
+        "patchSha256": "247f0206f3df5fce020ae5d03303baa72a69d1b7fbfdae2f5c19df0e27dc3b9d",
+        "targets": [
+          {
+            "path": "bin/omarchy-install-gaming-retroarch",
+            "beforeSha256": "aa2602bf6252a3a67428860885ca19f6878d689ef679d60d65637bb8c429cbbb",
+            "afterSha256": "077671618259e111a34f27ef2c1a20b4e0484226b16502bb33d52c216d36e864"
+          }
+        ]
+      },
+      {
+        "id": "aarch64-hide-unavailable-installs",
+        "description": "Gate known aarch64-unavailable Install rows behind a hideable visibility helper, and add Setup restore.",
+        "reference": "https://github.com/basecamp/omarchy/blob/346e69e1cec6c4e8924531874af6ba010a1bc99e/default/omarchy/omarchy-menu.jsonc",
+        "patch": "patches/omarchy/aarch64-hide-unavailable-installs.patch",
+        "patchSha256": "8d180bcfb5b9e9155bf4fef076afcf5e046ff6e2787a93c4f7e749fd3e7dea0c",
+        "targets": [
+          {
+            "path": "default/omarchy/omarchy-menu.jsonc",
+            "beforeSha256": "027096cc20b52f3073c7d61ad43ff1fc8fddeb127b05b41c129b0a97826cecb2",
+            "afterSha256": "d0a996d18aa7419aa9ff7b767f422557798bbf6508aa606c1244494136220671"
           }
         ]
       }

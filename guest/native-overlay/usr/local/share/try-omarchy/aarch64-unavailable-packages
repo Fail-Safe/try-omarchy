@@ -1,7 +1,7 @@
 # Packages that Install-menu paths cannot satisfy on Try Omarchy aarch64.
 # Format: package<TAB>display-name
-# Kept intentionally narrow: x86_64-only AUR/binaries, or repo-only names absent
-# from Arch Linux ARM (with no practical aarch64 install path today).
+# Includes x86_64-only AUR/binaries, and packages the Install path asks pacman for
+# that are absent from this guest's repos (often AUR / omarchy x86 channel only).
 ghostty	Ghostty
 microsoft-edge-stable-bin	Edge
 spotify	Spotify
@@ -18,3 +18,15 @@ umu-launcher	Wine game launcher
 wine-staging	Wine
 wine-mono	Wine
 wine-gecko	Wine
+sublime-text-4	Sublime Text
+visual-studio-code-bin	VSCode
+zed	Zed
+omazed	Zed
+nordvpn-bin	NordVPN
+once-bin	ONCE
+openai-codex-desktop	ChatGPT Desktop
+xpadneo-dkms	Xbox Controllers
+bitwarden	Bitwarden
+ollama	Ollama
+ollama-cuda	Ollama
+ollama-rocm	Ollama
