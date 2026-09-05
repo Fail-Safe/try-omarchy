@@ -385,6 +385,19 @@
         "image/png"
       ]
     },
+    "authenticationExperiment": {
+      "approvalLifetimeSeconds": 15,
+      "authorizationScope": "sudo-authentication",
+      "device": "virtserialport",
+      "guestDeviceMode": "0600",
+      "guestIdentity": "root-private-random-256-bit",
+      "hostKey": "per-guest-secure-enclave-p256",
+      "pamService": "sudo",
+      "port": "dev.tryomarchy.authentication",
+      "protocolVersion": 2,
+      "requiresEnrollment": true,
+      "signature": "ecdsa-p256-sha256"
+    },
     "sharedFolder": {
       "device": "virtio-9p-pci",
       "fsdriver": "local",

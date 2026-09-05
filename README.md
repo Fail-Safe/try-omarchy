@@ -249,6 +249,25 @@ Loopback binding prevents devices on Wi-Fi, Ethernet, or the wider LAN from
 connecting. It does not isolate the listener from other users or processes on
 the same Mac; guest SSH authentication is still required.
 
+### Experimental Touch ID for sudo
+
+The experimental native authentication bridge can enroll this Mac and use
+Touch ID as a sufficient authentication method for guest `sudo`:
+
+```sh
+try-omarchy-touch-id-enroll
+try-omarchy-touch-id-test
+```
+
+Enrollment requires the normal guest sudo path once, then pins a public key for
+a Touch ID-protected Secure Enclave signing key. The Mac stores only the
+Secure Enclave's device-bound encrypted key representation. Every later approval is signed
+over a root-private guest ID, fresh challenge, the sudo user and requesting user,
+the interactive TTY, and a 15-second validity window. Each enrolled guest has a
+distinct host signing key. The QEMU window must be frontmost. Cancellation,
+invalid responses, missing enrollment, and unavailable Touch ID all fall back
+to the normal guest password; no login or screen-unlock PAM policy is changed.
+
 ## Requirements
 
 - Apple Silicon Mac (`arm64`)

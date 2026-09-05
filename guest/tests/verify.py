@@ -506,6 +506,29 @@ def main() -> None:
         spec["runtime"]["clipboard"]["port"] == "dev.tryomarchy.clipboard",
         "clipboard contract names the virtio port",
     )
+    authentication = spec["runtime"]["authenticationExperiment"]
+    authentication_launcher = read(REPO / "macos/run-qemu-gpu.sh")
+    check(
+        authentication
+        == {
+            "approvalLifetimeSeconds": 15,
+            "authorizationScope": "sudo-authentication",
+            "device": "virtserialport",
+            "guestDeviceMode": "0600",
+            "guestIdentity": "root-private-random-256-bit",
+            "hostKey": "per-guest-secure-enclave-p256",
+            "pamService": "sudo",
+            "port": "dev.tryomarchy.authentication",
+            "protocolVersion": 2,
+            "requiresEnrollment": True,
+            "signature": "ecdsa-p256-sha256",
+        }
+        and "virtserialport,bus=omarchy-serial.0,nr=3" in authentication_launcher
+        and "name=dev.tryomarchy.authentication" in authentication_launcher
+        and "--bridge-native-authentication" in authentication_launcher
+        and "authentication_bridge_restarts < 5" in authentication_launcher,
+        "Touch ID sudo experiment has a signed, supervised virtio contract",
+    )
     camera = spec["runtime"]["camera"]
     check(
         camera
@@ -888,6 +911,52 @@ def main() -> None:
     check(
         'ATTR{name}=="dev.tryomarchy.clipboard"' in clipboard_rule and 'GROUP="users"' in clipboard_rule,
         "clipboard port is readable by the provisioned users group",
+    )
+    authentication_command = (
+        GUEST / "native-overlay/usr/local/bin/try-omarchy-touch-id-test"
+    )
+    check(
+        authentication_command.stat().st_mode & stat.S_IXUSR != 0
+        and "sudo -k" in read(authentication_command)
+        and "/var/lib/try-omarchy/native-authentication.json" not in read(authentication_command),
+        "Touch ID sudo test command is executable",
+    )
+    enrollment_command = (
+        GUEST / "native-overlay/usr/local/sbin/try-omarchy-touch-id-enroll"
+    )
+    check(
+        enrollment_command.stat().st_mode & stat.S_IXUSR != 0,
+        "Touch ID enrollment command is executable",
+    )
+    authentication_broker = (
+        GUEST
+        / "native-overlay/usr/local/lib/try-omarchy/native-authentication-broker"
+    )
+    with tempfile.TemporaryDirectory() as temporary:
+        py_compile.compile(
+            str(authentication_broker),
+            cfile=str(Path(temporary) / "authentication.pyc"),
+            doraise=True,
+        )
+    installer = read(GUEST / "scripts/install-touch-id-sudo-prototype.sh")
+    check(
+        authentication_broker.stat().st_mode & stat.S_IXUSR != 0
+        and "pam_exec.so quiet seteuid" in installer
+        and "/usr/local/lib/try-omarchy/native-authentication-broker pam" in installer
+        and "sudo.try-omarchy-before-touch-id" in installer
+        and "install-touch-id-sudo-prototype.sh" in configure,
+        "sudo PAM uses the root broker with password fallback and a live-install backup",
+    )
+    authentication_rule = read(
+        GUEST
+        / "native-overlay/etc/udev/rules.d/93-omarchy-native-authentication.rules"
+    )
+    check(
+        'ATTR{name}=="dev.tryomarchy.authentication"' in authentication_rule
+        and 'OWNER="root"' in authentication_rule
+        and 'GROUP="root"' in authentication_rule
+        and 'MODE="0600"' in authentication_rule,
+        "Touch ID authorization port is root-only",
     )
     mac_share = GUEST / "native-overlay/usr/local/bin/omarchy-native-mac-share"
     check(mac_share.stat().st_mode & stat.S_IXUSR != 0, "native Mac share mounter is executable")

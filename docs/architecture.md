@@ -64,6 +64,27 @@ is reading the camera. Camera permission, capture failure, or device removal is
 non-fatal to the VM; the launcher can restart the optional bridge without
 restarting Omarchy.
 
+An experimental root-only authentication port
+(`dev.tryomarchy.authentication`) lets the guest's `sudo` PAM policy request a
+fixed-purpose macOS Touch ID prompt. Enrollment creates a non-exportable P-256
+signing key in the Mac's Secure Enclave for a root-private random guest ID and
+pins its public key inside that guest. The host stores the Secure Enclave's
+device-bound encrypted key representation outside the Keychain, so local ad-hoc
+test builds do not need a provisioned Keychain access group. Each authentication uses a new 256-bit
+challenge. The host signs a
+canonical payload that binds the request ID, challenge, PAM user, requesting
+user, `sudo` service, interactive TTY, guest ID, signing-key ID, and a 15-second validity
+window. The guest verifies that signature with OpenSSL before PAM can return
+success. It never accepts an unsigned approval boolean.
+
+The QEMU window must be frontmost, the QEMU process identity must still match,
+and the host owns both enrollment and sudo prompt text. The PAM module is
+`sufficient`: a denial, missing enrollment, unavailable bridge, invalid
+signature, non-interactive request, or timeout falls through to Omarchy's
+normal password authentication. This prototype does not authenticate login or
+screen-unlock flows, cannot bind approval to the exact sudo command because PAM
+does not expose it, and is not a general guest-to-host approval service.
+
 When a folder is chosen on the start menu, QEMU exports it over virtio-9p with
 `security_model=none`, so every host file operation runs as the Mac user and
 the Mac keeps real modes and ownership. A small QEMU patch adds

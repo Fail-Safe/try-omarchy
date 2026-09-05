@@ -1,0 +1,8 @@
+#!/bin/sh
+
+set -eu
+
+sudo -k
+if sudo true; then
+  echo "sudo authenticated. Touch ID was used if no guest password was entered."
+fi
