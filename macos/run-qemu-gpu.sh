@@ -361,6 +361,7 @@ runtime = exact_keys(
     spec.get("runtime"),
     {
         "audio",
+        "authenticationExperiment",
         "camera",
         "clipboard",
         "compressedDisk",
@@ -402,6 +403,19 @@ clipboard = {
     "device": "virtserialport",
     "port": "dev.tryomarchy.clipboard",
     "formats": ["text/plain;charset=utf-8", "image/png"],
+}
+authentication = {
+    "approvalLifetimeSeconds": 15,
+    "authorizationScope": "sudo-authentication",
+    "device": "virtserialport",
+    "guestDeviceMode": "0600",
+    "guestIdentity": "root-private-random-256-bit",
+    "hostKey": "per-guest-secure-enclave-p256",
+    "pamService": "sudo",
+    "port": "dev.tryomarchy.authentication",
+    "protocolVersion": 2,
+    "requiresEnrollment": True,
+    "signature": "ecdsa-p256-sha256",
 }
 shared_folder = {
     "device": "virtio-9p-pci",
@@ -479,6 +493,7 @@ if (
     or runtime.get("camera") != camera
     or runtime.get("storage") != storage
     or runtime.get("clipboard") != clipboard
+    or runtime.get("authenticationExperiment") != authentication
     or runtime.get("sharedFolder") != shared_folder
     or runtime.get("devices") != expected_devices
     or runtime.get("minimumMemoryMiB") != 2048
