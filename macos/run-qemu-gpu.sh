@@ -148,6 +148,7 @@ for device in \
   virtio-blk-pci \
   virtio-gpu-gl-pci \
   virtio-keyboard-pci \
+  virtio-mouse-pci \
   virtio-net-pci \
   virtio-rng-pci \
   virtio-serial-pci \
@@ -1296,6 +1297,19 @@ case ${OMARCHY_QEMU_GPU_IMMERSIVE:-1} in
   *) fail "OMARCHY_QEMU_GPU_IMMERSIVE must be 0 or 1" ;;
 esac
 
+# Absolute tablet is the desktop default. Relative mouse is required before
+# Cocoa can lock the host cursor for games; the app can also hot-swap later
+# over QMP using the stable device ids below.
+case ${OMARCHY_QEMU_POINTER_MODE:-absolute} in
+  absolute)
+    pointer_device='virtio-tablet-pci,id=omarchy-tablet,romfile='
+    ;;
+  relative)
+    pointer_device='virtio-mouse-pci,id=omarchy-mouse,romfile='
+    ;;
+  *) fail "OMARCHY_QEMU_POINTER_MODE must be absolute or relative" ;;
+esac
+
 qemu_args=(
   -name 'Try Omarchy'
   -machine "$qemu_machine"
@@ -1324,11 +1338,13 @@ qemu_args=(
   # Cocoa forwards its live backing-pixel dimensions and the current host
   # display refresh rate through Virtio GPU EDID. Its accessibility-backed
   # Full grab keeps every Command chord with the focused guest in either
-  # presentation mode. Immersive launches Full Screen and hard-hides the Mac
-  # menu bar and Dock; otherwise Cocoa opens a centered, resizable window.
+  # presentation mode — keyboard capture only, not relative mouse lock.
+  # Immersive launches Full Screen and hard-hides the Mac menu bar and Dock;
+  # otherwise Cocoa opens a centered, resizable window. Relative lock needs
+  # virtio-mouse via pointer_device / OMARCHY_QEMU_POINTER_MODE.
   -display "cocoa,gl=es,show-cursor=on,zoom-to-fit=on,full-screen=$cocoa_full_screen,full-grab=on,immersive=$cocoa_immersive,swap-opt-cmd=off"
   -device 'virtio-keyboard-pci,romfile='
-  -device 'virtio-tablet-pci,romfile='
+  -device "$pointer_device"
   -object 'rng-random,id=omarchy-rng,filename=/dev/urandom'
   -device 'virtio-rng-pci,rng=omarchy-rng'
   -device virtio-balloon-pci

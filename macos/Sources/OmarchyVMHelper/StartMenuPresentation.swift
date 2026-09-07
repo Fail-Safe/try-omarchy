@@ -184,4 +184,10 @@ enum StartMenuPresentation {
             ? "Omarchy opens Full Screen with the Mac menu bar and Dock hidden."
             : "Omarchy opens in a window with the Mac menu bar and Dock available."
     }
+
+    static func relativePointerDetail(isEnabled: Bool) -> String {
+        isEnabled
+            ? "Starts with relative mouse for games. Switch anytime from the menu-bar mouse icon."
+            : "Desktop uses absolute pointing. Turn on for games that need pointer lock."
+    }
 }

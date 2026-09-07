@@ -81,7 +81,7 @@ case " $* " in
     for device in \
       hda-micro intel-hda virtconsole virtserialport virtio-balloon-pci \
       virtio-9p-pci virtio-blk-pci virtio-gpu-gl-pci virtio-keyboard-pci \
-      virtio-net-pci virtio-rng-pci virtio-serial-pci virtio-tablet-pci; do
+      virtio-net-pci virtio-rng-pci virtio-serial-pci virtio-tablet-pci virtio-mouse-pci; do
       printf 'name "%s"\n' "$device"
     done
     ;;
@@ -333,6 +333,8 @@ assert_not_contains "$disabled_qemu" hostfwd
 assert_not_contains "$disabled_qemu" tryomarchy.ssh_access
 assert_contains "$disabled_qemu" \
   'cocoa,gl=es,show-cursor=on,zoom-to-fit=on,full-screen=on,full-grab=on,immersive=on,swap-opt-cmd=off'
+assert_contains "$disabled_qemu" 'virtio-tablet-pci,id=omarchy-tablet,romfile='
+assert_not_contains "$disabled_qemu" virtio-mouse-pci
 assert_contains "$(<"$test_root/disabled/storage.log")" select-existing
 assert_contains "$(<"$test_root/disabled/storage.log")" create
 
@@ -340,6 +342,11 @@ run_scenario non-immersive 0 '' OMARCHY_QEMU_GPU_IMMERSIVE=0
 non_immersive_qemu=$(<"$test_root/non-immersive/qemu.log")
 assert_contains "$non_immersive_qemu" \
   'cocoa,gl=es,show-cursor=on,zoom-to-fit=on,full-screen=off,full-grab=on,immersive=off,swap-opt-cmd=off'
+
+run_scenario relative-pointer 0 '' OMARCHY_QEMU_POINTER_MODE=relative
+relative_pointer_qemu=$(<"$test_root/relative-pointer/qemu.log")
+assert_contains "$relative_pointer_qemu" 'virtio-mouse-pci,id=omarchy-mouse,romfile='
+assert_not_contains "$relative_pointer_qemu" virtio-tablet-pci
 
 # Simulate installing a newer app build after the first VM was created. The
 # saved VM must be selected before the launcher even considers the absent new

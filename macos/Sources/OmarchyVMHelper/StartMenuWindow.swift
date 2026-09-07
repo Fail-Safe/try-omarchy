@@ -203,6 +203,8 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
     private let savePortForwarding: ([PortForwardMapping]) -> String?
     private let immersiveMode: () -> Bool
     private let setImmersiveMode: (Bool) -> Void
+    private let relativePointerMode: () -> Bool
+    private let setRelativePointerMode: (Bool) -> Void
     private let launch: () -> Void
     private let canResetStorage: Bool
     private let storageLocation: () -> String?
@@ -221,6 +223,7 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
     private weak var startMenuScrollView: NSScrollView?
     private(set) var portForwardingEditor: PortForwardingEditor?
     private weak var immersiveCaption: NSTextField?
+    private weak var relativePointerCaption: NSTextField?
     private lazy var permissionWindowRestorer = PermissionWindowRestorer(
         canRestore: { [weak self] in
             guard let self else { return false }
@@ -283,6 +286,8 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         savePortForwarding: @escaping ([PortForwardMapping]) -> String? = { _ in nil },
         immersiveMode: @escaping () -> Bool = { true },
         setImmersiveMode: @escaping (Bool) -> Void = { _ in },
+        relativePointerMode: @escaping () -> Bool = { false },
+        setRelativePointerMode: @escaping (Bool) -> Void = { _ in },
         launch: @escaping () -> Void
     ) {
         self.accessibilityStatus = accessibilityStatus
@@ -307,10 +312,12 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         self.savePortForwarding = savePortForwarding
         self.immersiveMode = immersiveMode
         self.setImmersiveMode = setImmersiveMode
+        self.relativePointerMode = relativePointerMode
+        self.setRelativePointerMode = setRelativePointerMode
         self.launch = launch
 
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 760),
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 820),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -334,12 +341,13 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
     func prepareForPresentation(visibleFrame: NSRect?) {
         render()
         if let visibleFrame {
-            // The menu carries six rows once a resettable VM can choose where it
-            // lives. At 690 the launch button cleared the bottom edge by 15pt,
-            // which any difference in system font metrics turned into a button
-            // clipped off the window.
+            // The menu carries seven rows once a resettable VM can choose where
+            // it lives (including Immersive and Relative mouse). At 690 the
+            // launch button cleared the bottom edge by 15pt, which any
+            // difference in system font metrics turned into a button clipped
+            // off the window.
             let availableHeight = max(480, visibleFrame.height - 32)
-            window.setContentSize(NSSize(width: 600, height: min(760, availableHeight)))
+            window.setContentSize(NSSize(width: 600, height: min(820, availableHeight)))
         }
     }
 
@@ -558,6 +566,9 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
             minimumHeight: 90
         )
         let immersiveRow = immersiveSettingRow(isEnabled: immersiveMode())
+        let relativePointerRow = relativePointerSettingRow(
+            isEnabled: relativePointerMode()
+        )
 
         let storageStatus = storageLocationStatus()
         var storageRow: NSView?
@@ -614,7 +625,7 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         if let storageRow {
             permissionRowViews.append(storageRow)
         }
-        permissionRowViews.append(contentsOf: [portForwardingRow, immersiveRow])
+        permissionRowViews.append(contentsOf: [portForwardingRow, immersiveRow, relativePointerRow])
 
         var permissionRowsAndSeparators: [NSView] = []
         for (index, row) in permissionRowViews.enumerated() {
@@ -1026,33 +1037,67 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
     }
 
     private func immersiveSettingRow(isEnabled: Bool) -> NSView {
+        let built = makeToggleSettingRow(
+            symbolName: "arrow.up.left.and.arrow.down.right",
+            title: "Immersive",
+            accessibilityLabel: "Immersive mode",
+            detailText: StartMenuPresentation.immersiveDetail(isEnabled: isEnabled),
+            identifierPrefix: "immersive",
+            isEnabled: isEnabled,
+            action: #selector(changeImmersiveMode(_:))
+        )
+        immersiveCaption = built.caption
+        return built.row
+    }
+
+    private func relativePointerSettingRow(isEnabled: Bool) -> NSView {
+        let built = makeToggleSettingRow(
+            symbolName: "computermouse",
+            title: "Relative mouse",
+            accessibilityLabel: "Relative mouse",
+            detailText: StartMenuPresentation.relativePointerDetail(isEnabled: isEnabled),
+            identifierPrefix: "relative-pointer",
+            isEnabled: isEnabled,
+            action: #selector(changeRelativePointerMode(_:))
+        )
+        relativePointerCaption = built.caption
+        return built.row
+    }
+
+    private func makeToggleSettingRow(
+        symbolName: String,
+        title: String,
+        accessibilityLabel: String,
+        detailText: String,
+        identifierPrefix: String,
+        isEnabled: Bool,
+        action: Selector
+    ) -> (row: NSView, caption: NSTextField) {
         let symbol = NSImageView()
         symbol.image = NSImage(
-            systemSymbolName: "arrow.up.left.and.arrow.down.right",
+            systemSymbolName: symbolName,
             accessibilityDescription: nil
         )
         symbol.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 19, weight: .medium)
         symbol.contentTintColor = .controlAccentColor
-        symbol.identifier = NSUserInterfaceItemIdentifier("immersive-symbol")
+        symbol.identifier = NSUserInterfaceItemIdentifier("\(identifierPrefix)-symbol")
         symbol.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             symbol.widthAnchor.constraint(equalToConstant: 26),
             symbol.heightAnchor.constraint(equalToConstant: 26),
         ])
 
-        let title = NSTextField(labelWithString: "Immersive")
-        title.font = .systemFont(ofSize: 14, weight: .semibold)
-        title.identifier = NSUserInterfaceItemIdentifier("immersive-title")
+        let titleField = NSTextField(labelWithString: title)
+        titleField.font = .systemFont(ofSize: 14, weight: .semibold)
+        titleField.identifier = NSUserInterfaceItemIdentifier("\(identifierPrefix)-title")
 
-        let detailText = StartMenuPresentation.immersiveDetail(isEnabled: isEnabled)
         let detail = NSTextField(wrappingLabelWithString: detailText)
         detail.font = .systemFont(ofSize: 12)
         detail.textColor = .secondaryLabelColor
         detail.maximumNumberOfLines = 2
-        detail.identifier = NSUserInterfaceItemIdentifier("immersive-caption")
-        immersiveCaption = detail
+        detail.identifier = NSUserInterfaceItemIdentifier("\(identifierPrefix)-caption")
 
-        let labels = NSStackView(views: [title, detail])
+        let labels = NSStackView(views: [titleField, detail])
         labels.orientation = .vertical
         labels.alignment = .leading
         labels.spacing = 3
@@ -1061,16 +1106,16 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         let toggle = NSSwitch()
         toggle.state = isEnabled ? .on : .off
         toggle.target = self
-        toggle.action = #selector(changeImmersiveMode(_:))
+        toggle.action = action
         toggle.isEnabled = !microphoneRequestInFlight && !launchInProgress && !resetInProgress
-        toggle.identifier = NSUserInterfaceItemIdentifier("immersive-toggle")
-        toggle.setAccessibilityLabel("Immersive mode")
-        toggle.setAccessibilityTitleUIElement(title)
+        toggle.identifier = NSUserInterfaceItemIdentifier("\(identifierPrefix)-toggle")
+        toggle.setAccessibilityLabel(accessibilityLabel)
+        toggle.setAccessibilityTitleUIElement(titleField)
         toggle.setAccessibilityHelp(detailText)
         toggle.translatesAutoresizingMaskIntoConstraints = false
 
         let row = NSView()
-        row.identifier = NSUserInterfaceItemIdentifier("immersive-row")
+        row.identifier = NSUserInterfaceItemIdentifier("\(identifierPrefix)-row")
         row.translatesAutoresizingMaskIntoConstraints = false
         row.addSubview(symbol)
         row.addSubview(labels)
@@ -1087,7 +1132,7 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         ])
         labels.setContentHuggingPriority(.defaultLow, for: .horizontal)
         labels.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        return row
+        return (row, detail)
     }
 
     @objc private func beginAccessibilityRequest() {
@@ -1319,11 +1364,34 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
     }
 
     @objc private func changeImmersiveMode(_ sender: NSSwitch) {
+        applyToggleSetting(
+            sender: sender,
+            persist: setImmersiveMode,
+            detail: StartMenuPresentation.immersiveDetail,
+            caption: immersiveCaption
+        )
+    }
+
+    @objc private func changeRelativePointerMode(_ sender: NSSwitch) {
+        applyToggleSetting(
+            sender: sender,
+            persist: setRelativePointerMode,
+            detail: StartMenuPresentation.relativePointerDetail,
+            caption: relativePointerCaption
+        )
+    }
+
+    private func applyToggleSetting(
+        sender: NSSwitch,
+        persist: (Bool) -> Void,
+        detail: (Bool) -> String,
+        caption: NSTextField?
+    ) {
         guard !launchInProgress, !resetInProgress else { return }
         let isEnabled = sender.state == .on
-        setImmersiveMode(isEnabled)
-        let detailText = StartMenuPresentation.immersiveDetail(isEnabled: isEnabled)
-        immersiveCaption?.stringValue = detailText
+        persist(isEnabled)
+        let detailText = detail(isEnabled)
+        caption?.stringValue = detailText
         sender.setAccessibilityHelp(detailText)
         NSAccessibility.post(
             element: NSApplication.shared,

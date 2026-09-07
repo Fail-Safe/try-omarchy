@@ -269,4 +269,12 @@ struct StartMenuPresentationTests {
         #expect(StartMenuPresentation.immersiveDetail(isEnabled: false)
             == "Omarchy opens in a window with the Mac menu bar and Dock available.")
     }
+
+    @Test("relative pointer guidance distinguishes desktop and game modes")
+    func relativePointerGuidance() {
+        #expect(StartMenuPresentation.relativePointerDetail(isEnabled: true)
+            == "Starts with relative mouse for games. Switch anytime from the menu-bar mouse icon.")
+        #expect(StartMenuPresentation.relativePointerDetail(isEnabled: false)
+            == "Desktop uses absolute pointing. Turn on for games that need pointer lock.")
+    }
 }

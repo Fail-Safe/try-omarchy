@@ -54,6 +54,7 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
     private let sharedFolderStore: SharedFolderPreferenceStore
     private let portForwardingStore: PortForwardingPreferenceStore
     private let fullscreenPreferenceStore: FullscreenPreferenceStore
+    private let pointerPreferenceStore: PointerPreferenceStore
     private let storageLocationStore: StorageLocationPreferenceStore
     private let volumeProbe: VolumeProbing
     private let volumeRootDetector: VolumeRootDetecting
@@ -63,6 +64,8 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
     private var volumeObserver: NSObjectProtocol?
     private var hostPowerObserver: HostPowerNotificationObserver?
     private let hostSleepCoordinator = VMHostSleepCoordinator()
+    private let pointerModeStatusItem = PointerModeStatusItem()
+    private var pointerInputController: QMPPointerInputController?
 
     /// The workspace the running VM is writing to, so an unmount of its volume
     /// can be recognized as the disk disappearing under QEMU.
@@ -92,6 +95,7 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
         sharedFolderStore: SharedFolderPreferenceStore = SharedFolderPreferenceStore(),
         portForwardingStore: PortForwardingPreferenceStore = PortForwardingPreferenceStore(),
         fullscreenPreferenceStore: FullscreenPreferenceStore = FullscreenPreferenceStore(),
+        pointerPreferenceStore: PointerPreferenceStore = PointerPreferenceStore(),
         storageLocationStore: StorageLocationPreferenceStore = StorageLocationPreferenceStore(),
         volumeProbe: VolumeProbing = URLVolumeProbe(),
         volumeRootDetector: VolumeRootDetecting = FileManagerVolumeRootDetector(),
@@ -106,6 +110,7 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
         self.sharedFolderStore = sharedFolderStore
         self.portForwardingStore = portForwardingStore
         self.fullscreenPreferenceStore = fullscreenPreferenceStore
+        self.pointerPreferenceStore = pointerPreferenceStore
         self.storageLocationStore = storageLocationStore
         self.volumeProbe = volumeProbe
         self.volumeRootDetector = volumeRootDetector
@@ -202,6 +207,14 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
             setImmersiveMode: { [weak self] isImmersive in
                 self?.fullscreenPreferenceStore.save(
                     FullscreenPreferences(isImmersive: isImmersive)
+                )
+            },
+            relativePointerMode: { [weak self] in
+                self?.pointerPreferenceStore.load().mode == .relative
+            },
+            setRelativePointerMode: { [weak self] isRelative in
+                self?.pointerPreferenceStore.save(
+                    PointerPreferences(mode: isRelative ? .relative : .absolute)
                 )
             },
             launch: { [weak self] in
@@ -338,6 +351,7 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
         childRunning = false
         cancelHostWakeRetry()
         hostSleepCoordinator.disconnect()
+        disconnectPointerControl()
         let wasStopping = lifecycle.isStopping
         lifecycle.childExited()
         if applicationTerminationPending {
@@ -413,8 +427,12 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
             baseEnvironment: forwarding.environment,
             preferences: fullscreenPreferenceStore.load()
         )
-        let storage = StorageLocationLaunchConfiguration.make(
+        let pointer = PointerLaunchConfiguration.make(
             baseEnvironment: fullscreen.environment,
+            preferences: pointerPreferenceStore.load()
+        )
+        let storage = StorageLocationLaunchConfiguration.make(
+            baseEnvironment: pointer.environment,
             preference: storageLocationStore.load(),
             metrics: bundledMetrics,
             probe: volumeProbe,
@@ -476,6 +494,15 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
         } catch {
             failHostSleepControlSetup(detail: error.localizedDescription)
             return
+        }
+        let pointerMode = pointerPreferenceStore.load().mode
+        let pointerController = QMPPointerInputController(
+            socketPath: qmpSocketPath,
+            initialMode: pointerMode
+        )
+        pointerInputController = pointerController
+        pointerModeStatusItem.show(controller: pointerController) { [weak self] mode in
+            self?.pointerPreferenceStore.save(PointerPreferences(mode: mode))
         }
         virtualMachineReachedStart = true
         NSApp.setActivationPolicy(ApplicationPresentation.runningActivationPolicy)
@@ -804,6 +831,7 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
         activeLaunchAllowedBootRecovery = false
         cancelHostWakeRetry()
         hostSleepCoordinator.disconnect()
+        disconnectPointerControl()
         let recentStandardError = supervisor.recentStandardError
 
         let wasStopping = lifecycle.isStopping
@@ -890,6 +918,11 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
             return
         }
         startMenuWindow.launchDidFail(errorMessage: error.localizedDescription)
+    }
+
+    private func disconnectPointerControl() {
+        pointerModeStatusItem.hide()
+        pointerInputController = nil
     }
 
     private func finish(status: Int32) {
