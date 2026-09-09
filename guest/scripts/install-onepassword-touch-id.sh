@@ -30,6 +30,7 @@ done
 if [[ -f $unit ]]; then cp -p "$unit" "$backup_dir/$(basename "$unit")"; fi
 install -o root -g root -m 644 "$source_dir$unit" "$unit"
 systemctl daemon-reload
-systemctl enable --now "try-omarchy-onepassword-touch-id@$guest_user.service"
+systemctl enable "try-omarchy-onepassword-touch-id@$guest_user.service"
+systemctl restart "try-omarchy-onepassword-touch-id@$guest_user.service"
 printf '1Password Touch ID enabled. Previous files retained in %s\n' "$backup_dir"
 printf 'Disable with: sudo systemctl disable --now try-omarchy-onepassword-touch-id@%s.service\n' "$guest_user"

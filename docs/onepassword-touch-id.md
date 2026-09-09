@@ -27,6 +27,13 @@ the Mac's **Unlock 1Password in the focused Try Omarchy guest** prompt.
 If Touch ID is denied or unavailable, a guest password dialog uses the standard
 polkit PAM session. The 1Password account-password option remains available.
 
+The fallback asks for the guest Linux user's password, not the 1Password account
+password. It follows the guest's normal PAM lockout policy. Repeated failed or
+abandoned authentication attempts can temporarily block this path even while the
+1Password account password still works. Check the guest's authentication journal
+and `faillock --user "$USER"` before retrying repeatedly; this integration does
+not disable or bypass password lockouts.
+
 Disable the integration without changing PAM or deleting enrollment:
 
 ```sh
