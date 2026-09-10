@@ -91,6 +91,7 @@ chmod 0755 \
   "$root/usr/local/bin/try-omarchy-touch-id-test" \
   "$root/usr/local/lib/try-omarchy/native-authentication-broker" \
   "$root/usr/local/sbin/try-omarchy-touch-id-control" \
+  "$root/usr/local/sbin/try-omarchy-migrate-alacritty" \
   "$root/usr/local/sbin/try-omarchy-touch-id-enroll" \
   "$root/usr/local/lib/try-omarchy/install-vivaldi-arm64" \
   "$root/usr/lib/systemd/system-generators/try-omarchy-ssh-access"
