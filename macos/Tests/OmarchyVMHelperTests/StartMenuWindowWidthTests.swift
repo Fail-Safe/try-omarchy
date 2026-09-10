@@ -108,6 +108,14 @@ struct StartMenuWindowWidthTests {
             let reset = try #require(descendant(withIdentifier: "reset-button", in: content))
             let launchFrame = launch.convert(launch.bounds, to: content)
             let resetFrame = reset.convert(reset.bounds, to: content)
+            let attribution = try #require(descendant(withIdentifier: "start-menu-attribution", in: content))
+            let attributionFrame = try #require(attribution.superview).convert(
+                attribution.alignmentRect(forFrame: attribution.frame), to: content
+            )
+            #expect(abs(resetFrame.midX - launchFrame.midX) < 0.5)
+            #expect(abs(attributionFrame.maxX - launchFrame.maxX) < 0.5)
+            #expect(abs(attributionFrame.midY - resetFrame.midY) < 0.5)
+            #expect(attributionFrame.minX > resetFrame.maxX)
             #expect(content.bounds.contains(launchFrame))
             #expect(content.bounds.contains(resetFrame))
             #expect(launchFrame.minY > resetFrame.maxY)
@@ -115,6 +123,7 @@ struct StartMenuWindowWidthTests {
             #expect(launch.keyEquivalent == "\r")
             #expect(menu.window.frame.height <= screen.height - 32 + 0.5)
             let document = try #require(scroll.documentView)
+            #expect(scroll.contentView.bounds.origin.y == 0)
             if screenHeight == 1400 {
                 #expect(document.frame.height <= scroll.contentView.bounds.height + 0.5)
                 #expect(content.bounds.height > 832)

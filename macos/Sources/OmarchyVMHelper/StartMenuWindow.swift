@@ -334,6 +334,7 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
     }
 
     func prepareForPresentation(visibleFrame: NSRect?) {
+        let scrollOffset = startMenuScrollView?.contentView.bounds.origin.y ?? 0
         render()
         if let visibleFrame {
             let availableContent = window.contentRect(
@@ -344,6 +345,11 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
                 height: min(preferredContentHeight, max(1, availableContent.height))
             ))
             content.layoutSubtreeIfNeeded()
+            if let scrollView = startMenuScrollView, let document = scrollView.documentView {
+                let maximumOffset = max(0, document.frame.height - scrollView.contentView.bounds.height)
+                scrollView.contentView.scroll(to: NSPoint(x: 0, y: min(scrollOffset, maximumOffset)))
+                scrollView.reflectScrolledClipView(scrollView.contentView)
+            }
         }
     }
 
@@ -713,12 +719,6 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         reset.heightAnchor.constraint(equalToConstant: 30).isActive = true
         reset.widthAnchor.constraint(greaterThanOrEqualToConstant: 154).isActive = true
 
-        let resetViews: [NSView] = [reset]
-        let resetSection = NSStackView(views: resetViews)
-        resetSection.orientation = .vertical
-        resetSection.alignment = .centerX
-        resetSection.spacing = 4
-
         let launchButtonTitle = launchInProgress ? "Launching Omarchy…" : "Launch Omarchy"
         let launchButton = OmarchyActionButton(
             title: launchButtonTitle,
@@ -771,12 +771,17 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         footer.allowsEditingTextAttributes = true
         footer.translatesAutoresizingMaskIntoConstraints = false
 
-        let footerContainer = NSView()
-        footerContainer.addSubview(footer)
+        footer.identifier = NSUserInterfaceItemIdentifier("start-menu-attribution")
+        let secondaryActions = NSView()
+        secondaryActions.addSubview(reset)
+        secondaryActions.addSubview(footer)
         NSLayoutConstraint.activate([
-            footer.centerXAnchor.constraint(equalTo: footerContainer.centerXAnchor),
-            footer.topAnchor.constraint(equalTo: footerContainer.topAnchor),
-            footer.bottomAnchor.constraint(equalTo: footerContainer.bottomAnchor),
+            reset.centerXAnchor.constraint(equalTo: secondaryActions.centerXAnchor),
+            reset.topAnchor.constraint(equalTo: secondaryActions.topAnchor),
+            reset.bottomAnchor.constraint(equalTo: secondaryActions.bottomAnchor),
+            footer.trailingAnchor.constraint(equalTo: secondaryActions.trailingAnchor),
+            footer.centerYAnchor.constraint(equalTo: reset.centerYAnchor),
+            footer.leadingAnchor.constraint(greaterThanOrEqualTo: reset.trailingAnchor, constant: 12),
         ])
 
         let stack = NSStackView(views: [
@@ -795,14 +800,12 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         stack.setCustomSpacing(6, after: integrationHeading)
         stack.translatesAutoresizingMaskIntoConstraints = false
 
-        let actions = NSStackView(views: [launchButton, resetSection, footerContainer])
+        let actions = NSStackView(views: [launchButton, secondaryActions])
         actions.orientation = .vertical
         actions.alignment = .leading
         actions.spacing = 12
-        actions.setCustomSpacing(8, after: resetSection)
         actions.identifier = NSUserInterfaceItemIdentifier("start-menu-actions")
         actions.translatesAutoresizingMaskIntoConstraints = false
-        content.addSubview(actions)
 
         let document = StartMenuDocumentView()
         document.translatesAutoresizingMaskIntoConstraints = false
@@ -818,6 +821,7 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         scrollView.identifier = NSUserInterfaceItemIdentifier("start-menu-scroll")
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(scrollView)
+        content.addSubview(actions)
         startMenuScrollView = scrollView
 
         NSLayoutConstraint.activate([
@@ -836,9 +840,8 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
             stack.bottomAnchor.constraint(equalTo: document.bottomAnchor),
             permissionCard.widthAnchor.constraint(equalTo: stack.widthAnchor),
             integrationCard.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            resetSection.widthAnchor.constraint(equalTo: actions.widthAnchor),
+            secondaryActions.widthAnchor.constraint(equalTo: actions.widthAnchor),
             launchButton.widthAnchor.constraint(equalTo: actions.widthAnchor),
-            footerContainer.widthAnchor.constraint(equalTo: actions.widthAnchor),
         ])
 
         content.layoutSubtreeIfNeeded()
