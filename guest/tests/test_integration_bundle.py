@@ -1,0 +1,102 @@
+import importlib.util
+import json
+from pathlib import Path
+import tempfile
+import unittest
+import subprocess
+from unittest.mock import patch
+
+ROOT = Path(__file__).resolve().parents[2]
+
+def module(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    result = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(result)
+    return result
+
+builder = module('integration_builder', ROOT / 'integrations/build-bundle.py')
+updater = module('integration_updater', ROOT / 'integrations/updater.py')
+
+class IntegrationBundleTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        # macOS /var is a symlink; the production bundle must be canonical.
+        self.bundle = Path(self.temp.name).resolve() / 'bundle'
+        builder.build(self.bundle)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_complete_bundle_is_verifiable(self):
+        result = updater.manifest(self.bundle)
+        self.assertEqual(result['version'], 1)
+        self.assertIn('guest/scripts/install-onepassword-touch-id.sh', result['files'])
+        self.assertTrue((self.bundle / 'setup').stat().st_mode & 0o111)
+
+    def test_corruption_cannot_execute(self):
+        (self.bundle / 'setup').write_text('changed')
+        with self.assertRaisesRegex(RuntimeError, 'verification failed'):
+            updater.manifest(self.bundle)
+
+    def test_symlink_substitution_is_rejected(self):
+        target = self.bundle / 'setup'
+        original = target.read_bytes()
+        target.unlink()
+        other = self.bundle.parent / 'outside'
+        other.write_bytes(original)
+        target.symlink_to(other)
+        with self.assertRaisesRegex(RuntimeError, 'symlink'):
+            updater.manifest(self.bundle)
+
+    def test_manifest_traversal_rejected(self):
+        path = self.bundle / 'manifest.json'
+        data = json.loads(path.read_text())
+        data['files']['../outside'] = 'a' * 64
+        path.write_text(json.dumps(data))
+        with self.assertRaisesRegex(RuntimeError, 'path|unexpected'):
+            updater.manifest(self.bundle)
+
+    def test_menu_refresh_preserves_entries_and_has_omarchy_environment(self):
+        home = self.bundle.parent / 'home'
+        menu = home / '.config/omarchy/extensions/omarchy-menu.jsonc'
+        menu.parent.mkdir(parents=True)
+        menu.write_text('{\n  "custom": {"label":"Keep me","action":"true"},\n}\n')
+        with patch.object(updater, 'BUNDLE', self.bundle), patch.object(Path, 'home', return_value=home), patch.object(updater, 'run') as run:
+            run.return_value = subprocess.CompletedProcess([], 0, '', '')
+            with patch.dict(updater.os.environ, {}, clear=True):
+                updater.menu_entry()
+                updater.menu_entry()
+            self.assertEqual(run.call_args.kwargs['env']['OMARCHY_PATH'], str(home / '.local/share/omarchy'))
+        text = menu.read_text()
+        self.assertIn('Keep me', text)
+        self.assertEqual(text.count('"setup.try-omarchy-integrations"'), 1)
+        self.assertEqual(text.count('"setup.security.touch-id"'), 1)
+
+    def test_incomplete_install_and_old_running_agent_are_not_current(self):
+        state = self.bundle.parent / 'state'
+        state.mkdir()
+        identity = updater.manifest(self.bundle)['identity']
+        with patch.object(updater, 'BUNDLE', self.bundle), patch.object(updater, 'STATE', state), patch.object(updater, 'files_current', return_value=True), patch.object(updater, 'active', return_value=True):
+            (state / 'progress.json').write_text('{"status":"installing"}')
+            self.assertEqual(updater.guest_status(identity)['components']['bootstrap'], 'repair')
+            (state / 'progress.json').write_text('{"status":"complete"}')
+            self.assertEqual(updater.guest_status(identity)['components']['bootstrap'], 'current')
+            old = updater.guest_status('b' * 64)
+            self.assertEqual(old['components']['bootstrap'], 'repair')
+            self.assertEqual(old['identity'], 'b' * 64)
+
+    def test_unlisted_file_is_rejected(self):
+        (self.bundle / 'extra').write_text('unreviewed')
+        with self.assertRaisesRegex(RuntimeError, 'unexpected'):
+            updater.manifest(self.bundle)
+
+    def test_future_bundle_is_not_installed_by_old_updater(self):
+        path = self.bundle / 'manifest.json'
+        data = json.loads(path.read_text())
+        data['version'] = 2
+        path.write_text(json.dumps(data))
+        with self.assertRaisesRegex(RuntimeError, 'newer updater'):
+            updater.manifest(self.bundle)
+
+if __name__ == '__main__':
+    unittest.main()
