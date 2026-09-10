@@ -1654,6 +1654,9 @@ while true; do
       audio_bridge_status=$?
     fi
     audio_bridge_pid=""
+    # QEMU can exit between the process checks, taking the bridge down normally.
+    qemu_state=$(ps -p "$qemu_pid" -o state= 2>/dev/null || true)
+    [[ -n $qemu_state && $qemu_state != *Z* ]] || break
     fail "native audio bridge exited while QEMU was running (status $audio_bridge_status)"
   fi
 
