@@ -114,7 +114,8 @@ struct StartMenuWindowWidthTests {
             )
             #expect(abs(resetFrame.midX - launchFrame.midX) < 0.5)
             #expect(abs(attributionFrame.maxX - launchFrame.maxX) < 0.5)
-            #expect(abs(attributionFrame.midY - resetFrame.midY) < 0.5)
+            // AppKit can round an odd-height label to a half-point center offset.
+            #expect(abs(attributionFrame.midY - resetFrame.midY) <= 0.5)
             #expect(attributionFrame.minX > resetFrame.maxX)
             #expect(content.bounds.contains(launchFrame))
             #expect(content.bounds.contains(resetFrame))
