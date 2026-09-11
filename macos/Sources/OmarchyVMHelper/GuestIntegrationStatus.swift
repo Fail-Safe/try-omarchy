@@ -79,7 +79,7 @@ enum GuestIntegrationSetup {
 
     static func show(window: NSWindow? = nil) {
         let alert = NSAlert()
-        alert.messageText = "Update VM integrations"
+        alert.messageText = "Review VM integrations"
         alert.informativeText = "Inside Omarchy, open Setup > Try Omarchy Integrations. If that entry is missing, copy the command below and paste it into an Omarchy terminal.\n\nReview Touch ID, clock recovery, and compatibility updates before installing. Have your Linux password ready. Your existing VM is preserved."
         alert.addButton(withTitle: "Copy setup command")
         alert.addButton(withTitle: "Close")
