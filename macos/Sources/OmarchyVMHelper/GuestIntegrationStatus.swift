@@ -141,8 +141,14 @@ final class GuestIntegrationBridge: NSObject {
 
     func run() {
         NSApp.setActivationPolicy(.accessory)
-        item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        item?.button?.image = NSImage(systemSymbolName: "puzzlepiece.extension", accessibilityDescription: "VM integrations")
+        item?.button?.image?.isTemplate = true
         let menu = NSMenu()
+        let status = NSMenuItem(title: "Checking…", action: nil, keyEquivalent: "")
+        status.isEnabled = false
+        menu.addItem(status)
+        menu.addItem(.separator())
         let review = NSMenuItem(title: "Review VM integrations…", action: #selector(review), keyEquivalent: "")
         review.target = self
         menu.addItem(review)
@@ -164,7 +170,9 @@ final class GuestIntegrationBridge: NSObject {
     private func save(state: String, report: GuestIntegrationReport?) {
         let summary = report?.summary(expectedIdentity: GuestIntegrationCache.bundledIdentity)
             ?? (state == "checking" ? "Checking…" : "Setup or repair needed")
-        item?.button?.title = "Integrations: \(summary)"
+        item?.menu?.items.first?.title = summary
+        item?.button?.toolTip = "VM integrations: \(summary)"
+        item?.button?.setAccessibilityLabel("VM integrations: \(summary)")
         let value = GuestIntegrationCache(checkedAt: Date(), state: state, report: report)
         if let data = try? JSONEncoder().encode(value) {
             do { try data.write(to: cacheURL, options: .atomic) }
