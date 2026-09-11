@@ -85,6 +85,29 @@ class IntegrationBundleTests(unittest.TestCase):
             self.assertEqual(old['components']['bootstrap'], 'repair')
             self.assertEqual(old['identity'], 'b' * 64)
 
+    def test_review_refreshes_user_menu_only_after_successful_install(self):
+        for succeeds in (True, False):
+            with self.subTest(succeeds=succeeds):
+                events = []
+                def install(args, **kwargs):
+                    self.assertEqual(args[0], 'sudo')
+                    events.append('install')
+                    if not succeeds:
+                        raise subprocess.CalledProcessError(1, args)
+                with patch.object(updater, 'BUNDLE', self.bundle), \
+                     patch.object(updater, 'files_current', return_value=True), \
+                     patch.object(updater, 'active', return_value=False), \
+                     patch.object(updater, 'component_paths', return_value=[]), \
+                     patch.object(updater, 'run', side_effect=install), \
+                     patch.object(updater, 'menu_entry', side_effect=lambda: events.append('refresh')), \
+                     patch('builtins.input', side_effect=['1', 'y']), patch('builtins.print'):
+                    if succeeds:
+                        updater.review()
+                    else:
+                        with self.assertRaises(subprocess.CalledProcessError):
+                            updater.review()
+                self.assertEqual(events, ['install', 'refresh'] if succeeds else ['install'])
+
     def test_unlisted_file_is_rejected(self):
         (self.bundle / 'extra').write_text('unreviewed')
         with self.assertRaisesRegex(RuntimeError, 'unexpected'):

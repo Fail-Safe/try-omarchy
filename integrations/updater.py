@@ -246,7 +246,7 @@ def install(user, selected):
                                ('try-omarchy-integrations.service', '/usr/lib/systemd/system/try-omarchy-integrations.service')]:
             shutil.copy2(payload / source, target)
         # Preserve existing user menu entries, including the sudo entry just installed.
-        run(['runuser', '-u', user, '--', '/usr/bin/python3', '-I', str(STORE / 'updater.py'), 'menu'])
+        run(['runuser', '-u', user, '--', '/usr/bin/python3', '-I', str(STORE / 'updater.py'), 'menu-install'])
         run(['systemctl', 'daemon-reload'])
         run(['systemctl', 'enable', '--now', 'try-omarchy-integrations.service'])
         run(['systemctl', 'restart', 'try-omarchy-integrations.service'])
@@ -310,6 +310,7 @@ def review():
         return
     user = pwd.getpwuid(os.getuid()).pw_name
     run(['sudo', '/usr/bin/python3', '-I', str(BUNDLE / 'updater.py'), 'install', user, *selected])
+    menu_entry()
 
 
 if __name__ == '__main__':
@@ -321,6 +322,8 @@ if __name__ == '__main__':
             review()
         elif action == 'menu':
             menu_entry()
+        elif action == 'menu-install':
+            menu_entry(refresh=False)
         elif action == 'stage-menu' and len(sys.argv) == 3:
             menu_entry(Path(sys.argv[2]), refresh=False)
         elif action == 'install' and len(sys.argv) >= 4 and all(s in COMPONENTS for s in sys.argv[3:]):

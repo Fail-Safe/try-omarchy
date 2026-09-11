@@ -9,7 +9,7 @@ set -euo pipefail
 guest_user=$1
 getent passwd "$guest_user" >/dev/null
 source_dir=$(cd "$(dirname "$0")/../native-overlay" && pwd)
-python3 -I -c 'import gi; gi.require_version("Gtk", "3.0"); gi.require_version("PolkitAgent", "1.0"); from gi.repository import Gtk, PolkitAgent'
+env -u DISPLAY -u WAYLAND_DISPLAY python3 -I -c 'import gi; gi.require_version("Gtk", "3.0"); gi.require_version("PolkitAgent", "1.0"); from gi.repository import Gtk, PolkitAgent'
 [[ -f /var/lib/try-omarchy/native-authentication.json ]] || {
   echo "Pair this guest using the Touch ID setup first." >&2
   exit 1
