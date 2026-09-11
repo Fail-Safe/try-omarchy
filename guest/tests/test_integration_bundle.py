@@ -72,6 +72,23 @@ class IntegrationBundleTests(unittest.TestCase):
         self.assertEqual(text.count('"setup.try-omarchy-integrations"'), 1)
         self.assertEqual(text.count('"setup.security.touch-id"'), 1)
 
+    def test_menu_upgrade_replaces_only_the_previous_generated_entry(self):
+        menu = self.bundle.parent / 'menu.jsonc'
+        old = '  "setup.try-omarchy-integrations": {"label":"Try Omarchy Integrations","action":"omarchy-launch-floating-terminal-with-presentation /usr/local/bin/try-omarchy-integrations"},\n'
+        for custom in (False, True):
+            entry = old.replace('Try Omarchy Integrations', 'My custom label') if custom else old
+            menu.write_text('{\n' + entry + '  "custom": {"action":"true"},\n}\n')
+            with patch.object(updater, 'BUNDLE', self.bundle):
+                updater.menu_entry(menu, refresh=False)
+            text = menu.read_text()
+            self.assertIn('"custom": {"action":"true"}', text)
+            self.assertEqual(text.count('"setup.try-omarchy-integrations"'), 1)
+            if custom:
+                self.assertIn(entry, text)
+            else:
+                self.assertNotIn(old, text)
+                self.assertIn('xdg-terminal-exec', text)
+
     def test_incomplete_install_and_old_running_agent_are_not_current(self):
         state = self.bundle.parent / 'state'
         state.mkdir()
