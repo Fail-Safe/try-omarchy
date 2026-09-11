@@ -314,8 +314,16 @@ def review():
     if input('Continue with installation? [y/N] ').strip().lower() != 'y':
         return
     user = pwd.getpwuid(os.getuid()).pw_name
-    run(['sudo', '/usr/bin/python3', '-I', str(BUNDLE / 'updater.py'), 'install', user, *selected])
-    menu_entry()
+    try:
+        run(['sudo', '/usr/bin/python3', '-I', str(BUNDLE / 'updater.py'), 'install', user, *selected])
+        menu_entry()
+    except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as error:
+        print('Integration setup could not complete: ' + str(error), file=sys.stderr)
+        print('Review the messages above before closing. Resolve the reported problem and retry.', file=sys.stderr)
+        raise
+    finally:
+        if sys.stdin.isatty():
+            input('\nPress Enter to close the installation result…')
 
 
 if __name__ == '__main__':

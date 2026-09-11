@@ -102,28 +102,58 @@ class IntegrationBundleTests(unittest.TestCase):
             self.assertEqual(old['components']['bootstrap'], 'repair')
             self.assertEqual(old['identity'], 'b' * 64)
 
-    def test_review_refreshes_user_menu_only_after_successful_install(self):
-        for succeeds in (True, False):
-            with self.subTest(succeeds=succeeds):
-                events = []
-                def install(args, **kwargs):
-                    self.assertEqual(args[0], 'sudo')
-                    events.append('install')
-                    if not succeeds:
-                        raise subprocess.CalledProcessError(1, args)
-                with patch.object(updater, 'BUNDLE', self.bundle), \
-                     patch.object(updater, 'files_current', return_value=True), \
-                     patch.object(updater, 'active', return_value=False), \
-                     patch.object(updater, 'component_paths', return_value=[]), \
-                     patch.object(updater, 'run', side_effect=install), \
-                     patch.object(updater, 'menu_entry', side_effect=lambda: events.append('refresh')), \
-                     patch('builtins.input', side_effect=['1', 'y']), patch('builtins.print'):
-                    if succeeds:
-                        updater.review()
-                    else:
-                        with self.assertRaises(subprocess.CalledProcessError):
-                            updater.review()
-                self.assertEqual(events, ['install', 'refresh'] if succeeds else ['install'])
+    def test_install_result_waits_after_success_or_failure(self):
+        for choice in ('1', '3'):
+            for interactive in (True, False):
+                for succeeds in (True, False):
+                    with self.subTest(choice=choice, interactive=interactive, succeeds=succeeds):
+                        events = []
+                        def install(args, **kwargs):
+                            self.assertEqual(args[0], 'sudo')
+                            self.assertEqual(args[6:], ['sudo', 'clock', 'holds'] if choice == '1' else ['onepassword'])
+                            events.append('install')
+                            if not succeeds:
+                                raise subprocess.CalledProcessError(1, args)
+                        def answer(prompt):
+                            if 'Choose' in prompt:
+                                return choice
+                            if 'Continue with installation' in prompt:
+                                return 'y'
+                            self.assertIn('Press Enter', prompt)
+                            events.append('acknowledge')
+                            return ''
+                        def message(*args, **kwargs):
+                            if str(args[0]).startswith('Integration setup could not complete'):
+                                events.append('error')
+                        with patch.object(updater, 'BUNDLE', self.bundle), \
+                             patch.object(updater, 'files_current', return_value=True), \
+                             patch.object(updater, 'active', return_value=False), \
+                             patch.object(updater, 'component_paths', return_value=[]), \
+                             patch.object(updater, 'run', side_effect=install), \
+                             patch.object(updater, 'menu_entry', side_effect=lambda: events.append('refresh')), \
+                             patch.object(updater.sys.stdin, 'isatty', return_value=interactive), \
+                             patch('builtins.input', side_effect=answer), patch('builtins.print', side_effect=message):
+                            if succeeds:
+                                updater.review()
+                            else:
+                                with self.assertRaises(subprocess.CalledProcessError):
+                                    updater.review()
+                        expected = ['install', 'refresh'] if succeeds else ['install', 'error']
+                        self.assertEqual(events, expected + (['acknowledge'] if interactive else []))
+
+    def test_declined_install_and_exit_do_not_pause(self):
+        for choice in ('1', '3', '4'):
+            answers = [choice, 'n'] if choice != '4' else [choice]
+            with self.subTest(choice=choice), \
+                 patch.object(updater, 'BUNDLE', self.bundle), \
+                 patch.object(updater, 'files_current', return_value=True), \
+                 patch.object(updater, 'active', return_value=False), \
+                 patch.object(updater, 'component_paths', return_value=[]), \
+                 patch.object(updater, 'run') as run, \
+                 patch.object(updater.sys.stdin, 'isatty', return_value=True), \
+                 patch('builtins.input', side_effect=answers), patch('builtins.print'):
+                updater.review()
+                run.assert_not_called()
 
     def test_unlisted_file_is_rejected(self):
         (self.bundle / 'extra').write_text('unreviewed')
