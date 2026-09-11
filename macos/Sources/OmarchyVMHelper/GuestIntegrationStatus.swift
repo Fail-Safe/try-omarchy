@@ -188,6 +188,14 @@ final class GuestIntegrationBridge: NSObject {
             return
         }
         offeredReview = true
+        // A repeating timer cannot fire again while its own callback presents a modal.
+        DispatchQueue.main.async { [weak self] in
+            self?.presentReview(expected: expected, noticeURL: noticeURL)
+        }
+    }
+
+    private func presentReview(expected: String, noticeURL: URL) {
+        guard targetIdentity.isStillRunning else { return }
         let alert = NSAlert()
         alert.messageText = "Review your VM integrations"
         alert.informativeText = lastState == "no-response"
