@@ -294,7 +294,11 @@ def review():
     print('\n1. Install/update integration support\n2. Set up or test Touch ID for sudo\n3. Enable/update Touch ID for 1Password\n4. Exit')
     choice = input('\nChoose [1-4]: ').strip()
     if choice == '2':
-        run(['/usr/local/bin/try-omarchy-touch-id'])
+        try:
+            run(['/usr/local/bin/try-omarchy-touch-id'])
+        finally:
+            if sys.stdin.isatty():
+                input('\nPress Enter to close the Touch ID result…')
         return
     if choice not in ('1', '3'):
         return

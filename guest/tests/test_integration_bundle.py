@@ -130,6 +130,36 @@ class IntegrationBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'unexpected'):
             updater.manifest(self.bundle)
 
+    def test_touch_id_result_waits_for_acknowledgement_and_preserves_failure(self):
+        for interactive in (True, False):
+            for status in (0, 1, 130):
+                with self.subTest(interactive=interactive, status=status):
+                    events = []
+                    def touch_id(args):
+                        self.assertEqual(args, ['/usr/local/bin/try-omarchy-touch-id'])
+                        events.append('result')
+                        if status:
+                            raise subprocess.CalledProcessError(status, args)
+                    def answer(prompt):
+                        if 'Choose' in prompt:
+                            return '2'
+                        self.assertIn('Press Enter', prompt)
+                        events.append('acknowledge')
+                        return ''
+                    with patch.object(updater, 'BUNDLE', self.bundle), \
+                         patch.object(updater, 'files_current', return_value=True), \
+                         patch.object(updater, 'active', return_value=False), \
+                         patch.object(updater, 'run', side_effect=touch_id), \
+                         patch.object(updater.sys.stdin, 'isatty', return_value=interactive), \
+                         patch('builtins.input', side_effect=answer), patch('builtins.print'):
+                        if status:
+                            with self.assertRaises(subprocess.CalledProcessError) as error:
+                                updater.review()
+                            self.assertEqual(error.exception.returncode, status)
+                        else:
+                            updater.review()
+                    self.assertEqual(events, ['result', 'acknowledge'] if interactive else ['result'])
+
     def test_future_bundle_is_not_installed_by_old_updater(self):
         path = self.bundle / 'manifest.json'
         data = json.loads(path.read_text())
