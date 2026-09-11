@@ -383,6 +383,25 @@ all of that app's factory-image changes to an existing VM, and an in-guest
 update should not be assumed to reproduce them. A confirmed reset is the
 deliberate, destructive way to start again from the newest bundled factory.
 
+### Updating integrations in an existing VM
+
+The Mac launcher’s **VM integrations → Review…** action explains how to add
+new Try Omarchy features to an existing VM. It offers a one-time setup command
+for guests that do not yet have the integration manager. Run that command in an
+Omarchy terminal; it mounts the app’s dedicated read-only bundle and opens a
+review before requesting the Linux administrator password. SSH and personal
+folder sharing are not required.
+
+After setup, use **Omarchy Menu → Setup → Try Omarchy Integrations** or run
+`try-omarchy-integrations`. The guide offers sudo Touch ID support, recovery after
+Mac sleep, and package compatibility repairs. Touch ID pairing and the optional
+1Password integration are separate explicit choices.
+
+The app checks integration status after every VM launch. The launcher labels
+cached results **Last check**. A guest that does not respond may need setup or
+repair; a timeout is not proof that its components are absent. See
+[integration updates](docs/integration-updates.md) for scope and recovery details.
+
 ### Repairing update holds in an older guest
 
 Older guests may fail Omarchy Update with conflicting `libaquamarine.so`
