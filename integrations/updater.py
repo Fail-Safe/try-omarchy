@@ -262,8 +262,9 @@ def menu_entry(path=None, refresh=True):
     destination = path or Path.home() / '.config/omarchy/extensions/omarchy-menu.jsonc'
     module.install(destination)
     module.ENTRY_ID = '"setup.try-omarchy-integrations"'
-    module.ENTRY = '  "setup.try-omarchy-integrations": {"label":"Try Omarchy Integrations","action":"omarchy-launch-floating-terminal-with-presentation /usr/local/bin/try-omarchy-integrations"},\n'
-    module.install(destination)
+    module.ENTRY = '  "setup.try-omarchy-integrations": {"label":"Try Omarchy Integrations","action":"setsid uwsm-app -- xdg-terminal-exec --app-id=org.omarchy.terminal --title=Try-Omarchy-Integrations -e /usr/local/bin/try-omarchy-integrations"},\n'
+    previous_entry = '  "setup.try-omarchy-integrations": {"label":"Try Omarchy Integrations","action":"omarchy-launch-floating-terminal-with-presentation /usr/local/bin/try-omarchy-integrations"},\n'
+    module.install(destination, previous_entry=previous_entry)
     if refresh:
         environment = os.environ.copy()
         environment.setdefault('OMARCHY_PATH', str(Path.home() / '.local/share/omarchy'))
@@ -286,7 +287,7 @@ def review():
     if not Path('/opt/1Password/1password').is_file():
         password_status = 'install 1Password first'
     elif active(f'try-omarchy-onepassword-touch-id@{user}.service'):
-        password_status = 'enabled; lock 1Password to test Touch ID'
+        password_status = 'integration installed; account setup and unlock test still required'
     else:
         password_status = 'setup available'
     print('  Touch ID for 1Password: ' + password_status)
@@ -299,7 +300,7 @@ def review():
         return
     selected = ['sudo', 'clock', 'holds'] if choice == '1' else ['onepassword']
     if choice == '3':
-        print('First pair Touch ID for sudo. In 1Password enable system authentication, unlock with your account password, and leave it running.')
+        print('First pair Touch ID for sudo. Sign in to 1Password if needed, enable system authentication, unlock with your account password, and leave it running. Installing support does not sign you in or test an unlock.')
     print('\nExisting integration files may be replaced; backups will be retained.')
     for name in selected:
         for source, target in component_paths(name):
