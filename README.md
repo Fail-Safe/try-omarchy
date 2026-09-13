@@ -458,7 +458,7 @@ brew install pkg-config
 ```
 
 `make doctor` performs the basic preflight. `make runtime` downloads a
-checksum-pinned `arm64_sequoia` dependency set, builds QEMU for macOS 15.0,
+checksum-pinned `arm64_sequoia` dependency set, builds QEMU and patched libslirp for macOS 15.0,
 and rejects any runtime image that raises that minimum or strongly imports an
 API unavailable on the declared platform. Installed Homebrew library versions
 are never copied into the app.
