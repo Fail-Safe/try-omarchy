@@ -20,6 +20,7 @@ class StaleRunCleanupTests(unittest.TestCase):
                 function = source[source.index('reap_stale_work_dirs() {'):source.index('\nreap_stale_work_dirs\n')]
                 function = function.replace('/private/tmp/omarchy-qemu-gpu.??????', directory + '/omarchy-qemu-gpu.??????')
                 prologue = '''
+qemu_bin=/test/qemu
 _qps_owner() { id -u; }
 _qps_permissions() { echo 700; }
 ps() {
