@@ -749,16 +749,16 @@ vivaldi = exact_keys(
     "build spec Vivaldi component",
 )
 if vivaldi != {
-    "version": "8.2.4133.33",
+    "version": "8.2.4133.52",
     "rpmRelease": 1,
-    "pkgrel": 2,
+    "pkgrel": 1,
     "repository": "https://repo.vivaldi.com/stable",
-    "rpmUrl": "https://downloads.vivaldi.com/stable/vivaldi-stable-8.2.4133.33-1.aarch64.rpm",
-    "rpmSha256": "99fe7542199ba11d16d9af02783540c8c03554c37d80597a219595751414503d",
+    "rpmUrl": "https://downloads.vivaldi.com/stable/vivaldi-stable-8.2.4133.52-1.aarch64.rpm",
+    "rpmSha256": "999e0de90883041906ccb3f9a62972318743d819b465a4e788329bb53ffa9a9a",
     "signingKey": "keys/vivaldi-package-composer-key11.asc",
     "signingKeySha256": "5c67d85c0aca9c0d166edb5bc5e6ebc21d67bce4e67c645e7bd76d299fd337ef",
     "signingFingerprint": "8D1FA52AEF58A09D889DD4221256C34716BD9233",
-    "reportedVersion": "Vivaldi 8.2.4133.33",
+    "reportedVersion": "Vivaldi 8.2.4133.52",
     "license": "Multiple, see https://www.vivaldi.com/",
 }:
     fail("Vivaldi installer is not pinned to the reviewed signed ARM64 release")
@@ -981,15 +981,18 @@ vcpu_count=${OMARCHY_QEMU_GPU_CPUS-$default_vcpu_count}
   fail "OMARCHY_QEMU_GPU_CPUS must be between 4 and $host_cpu_count"
 }
 
-# Guest memory is a boot-time allocation. The Swift app resolves the user's
-# stored choice against this host before exporting it; re-check independently
-# here so a hand-set environment value can never start a guest below the
-# manifest's minimumMemoryMiB or starve the host. The 4096 default matches the
-# manifest's recommendedMemoryMiB, both verified at build time. The host cap
-# applies only above the default: 4096 has always booted unconditionally, and
-# hosts smaller than 8 GiB exist (CI runners), so gating the default on host
-# size would be a regression, not a safeguard.
-memory_mib=${OMARCHY_QEMU_GPU_MEMORY_MIB:-4096}
+# Match the app's host-aware default and independently validate scripted
+# allocations. The guest manifest's 4096 MiB recommendation is the baseline;
+# Macs with at least 16 GiB default to 8 GiB. Keep 4 GiB for macOS above the
+# baseline, while retaining support for smaller hosts such as CI runners.
+host_memory_bytes=$(sysctl -n hw.memsize 2>/dev/null) || fail "cannot determine the host memory size"
+[[ $host_memory_bytes =~ ^[1-9][0-9]{0,17}$ ]] || fail "host memory size is invalid: $host_memory_bytes"
+host_memory_mib=$((host_memory_bytes / 1048576))
+default_memory_mib=4096
+if (( host_memory_mib >= 16384 )); then
+  default_memory_mib=8192
+fi
+memory_mib=${OMARCHY_QEMU_GPU_MEMORY_MIB:-$default_memory_mib}
 # Seven digits bound the value below any real host while keeping the
 # arithmetic far from 64-bit wraparound; forcing base 10 stops bash from
 # reading a leading zero as octal while QEMU would read the same string as
@@ -998,9 +1001,6 @@ memory_mib=${OMARCHY_QEMU_GPU_MEMORY_MIB:-4096}
 memory_mib=$((10#$memory_mib))
 (( memory_mib >= 2048 )) || fail "the ARM guest requires at least 2048 MiB of memory"
 if (( memory_mib > 4096 )); then
-  host_memory_bytes=$(sysctl -n hw.memsize 2>/dev/null) || fail "cannot determine the host memory size"
-  [[ $host_memory_bytes =~ ^[1-9][0-9]{0,17}$ ]] || fail "host memory size is invalid: $host_memory_bytes"
-  host_memory_mib=$((host_memory_bytes / 1048576))
   (( memory_mib + 4096 <= host_memory_mib )) || {
     fail "OMARCHY_QEMU_GPU_MEMORY_MIB must leave the host at least 4096 MiB (host has ${host_memory_mib} MiB)"
   }

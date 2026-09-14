@@ -361,8 +361,8 @@ def main() -> None:
                 "id": "vivaldi-arm64",
                 "userInitiated": True,
                 "delivery": "pinned-signed-vendor-rpm",
-                "applicationUrl": "https://downloads.vivaldi.com/stable/vivaldi-stable-8.2.4133.33-1.aarch64.rpm",
-                "applicationSha256": "99fe7542199ba11d16d9af02783540c8c03554c37d80597a219595751414503d",
+                "applicationUrl": "https://downloads.vivaldi.com/stable/vivaldi-stable-8.2.4133.52-1.aarch64.rpm",
+                "applicationSha256": "999e0de90883041906ccb3f9a62972318743d819b465a4e788329bb53ffa9a9a",
                 "signingKey": "keys/vivaldi-package-composer-key11.asc",
                 "signingFingerprint": "8D1FA52AEF58A09D889DD4221256C34716BD9233",
                 "runtimePackages": ["rpm-tools"],
@@ -441,6 +441,10 @@ def main() -> None:
         "fakeroot" in requested_packages and "fakeroot" in packages,
         "factory transaction includes fakeroot for AUR package builds",
     )
+    check(
+        "rpm-tools" in requested_packages and "rpm-tools" in packages,
+        "factory transaction includes the RPM signature verifier for Vivaldi",
+    )
     yay = spec.get("supplyChain", {}).get("yay", {})
     check(
         set(yay)
@@ -470,16 +474,16 @@ def main() -> None:
     check(
         vivaldi
         == {
-            "version": "8.2.4133.33",
+            "version": "8.2.4133.52",
             "rpmRelease": 1,
-            "pkgrel": 2,
+            "pkgrel": 1,
             "repository": "https://repo.vivaldi.com/stable",
-            "rpmUrl": "https://downloads.vivaldi.com/stable/vivaldi-stable-8.2.4133.33-1.aarch64.rpm",
-            "rpmSha256": "99fe7542199ba11d16d9af02783540c8c03554c37d80597a219595751414503d",
+            "rpmUrl": "https://downloads.vivaldi.com/stable/vivaldi-stable-8.2.4133.52-1.aarch64.rpm",
+            "rpmSha256": "999e0de90883041906ccb3f9a62972318743d819b465a4e788329bb53ffa9a9a",
             "signingKey": "keys/vivaldi-package-composer-key11.asc",
             "signingKeySha256": "5c67d85c0aca9c0d166edb5bc5e6ebc21d67bce4e67c645e7bd76d299fd337ef",
             "signingFingerprint": "8D1FA52AEF58A09D889DD4221256C34716BD9233",
-            "reportedVersion": "Vivaldi 8.2.4133.33",
+            "reportedVersion": "Vivaldi 8.2.4133.52",
             "license": "Multiple, see https://www.vivaldi.com/",
         },
         "official signed Vivaldi ARM64 RPM and package key are fully pinned",
@@ -982,6 +986,10 @@ def main() -> None:
         and 'cp -a "$vivaldi_key"' in register_runtime,
         "packaged Omarchy runtime owns the Vivaldi installer and signing key",
     )
+    check(
+        "depend = rpm-tools" in register_runtime,
+        "packaged Omarchy runtime keeps the Vivaldi signature verifier installed",
+    )
     register_yay = read(GUEST / "scripts/register-pinned-yay.sh")
     check(
         "register-pinned-yay.sh" in build
@@ -1117,7 +1125,9 @@ def main() -> None:
         "**Vivaldi**" in third_party_notices
         and "not redistributed" in third_party_notices
         and "signed official ARM64 RPM" not in third_party_notices
-        and "installer-only input" in third_party_notices
+        and "factory image includes the `rpm-tools`" in third_party_notices
+        and "browser payload" in third_party_notices
+        and "remains outside the factory image and factory provenance" in third_party_notices
         and "vivaldi.com/partners/linux" in third_party_notices,
         "third-party notices distinguish signed Vivaldi installation from redistribution",
     )
@@ -1158,6 +1168,9 @@ def main() -> None:
     )
     check(
         "Vivaldi must remain a user-initiated post-build install" in finalizer
+        and "pacman -Qkk rpm-tools" in finalizer
+        and "for verifier in rpm rpmkeys" in finalizer
+        and '"$verifier" --version' in finalizer
         and "pacman -Qoq \"$vivaldi_installer\"" in finalizer
         and "pacman -Qoq \"$vivaldi_key\"" in finalizer
         and "Vivaldi package key digest mismatch" in finalizer,
