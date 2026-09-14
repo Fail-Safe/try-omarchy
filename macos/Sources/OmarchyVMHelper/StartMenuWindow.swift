@@ -170,6 +170,7 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
     private var networkEditor: NetworkEditor?
     private let immersiveMode: () -> Bool
     private let setImmersiveMode: (Bool) -> Void
+    private let integrationCacheURL: () -> URL?
     private let launch: () -> Void
     private let canResetStorage: Bool
     private let storageLocation: () -> String?
@@ -257,6 +258,7 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         saveNetworkPreferences: @escaping (VMNetworkPreferences) -> String? = { _ in nil },
         immersiveMode: @escaping () -> Bool = { true },
         setImmersiveMode: @escaping (Bool) -> Void = { _ in },
+        integrationCacheURL: @escaping () -> URL? = { nil },
         launch: @escaping () -> Void
     ) {
         self.accessibilityStatus = accessibilityStatus
@@ -286,6 +288,7 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         self.saveNetworkPreferences = saveNetworkPreferences
         self.immersiveMode = immersiveMode
         self.setImmersiveMode = setImmersiveMode
+        self.integrationCacheURL = integrationCacheURL
         self.launch = launch
 
         window = NSWindow(
@@ -440,6 +443,8 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         NSApp.terminate(nil)
         return false
     }
+
+    @objc private func reviewIntegrations() { GuestIntegrationSetup.show(window: window) }
 
     private func render() {
         let preservedScrollOffset = startMenuScrollView?.contentView.bounds.minY ?? 0
@@ -638,6 +643,13 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
             integrationRowViews.append(storageRow)
         }
         integrationRowViews.append(contentsOf: [resourceRow, networkingRow, portForwardingRow, immersiveRow])
+        let integrationStatus = GuestIntegrationCache.read(integrationCacheURL())
+        integrationRowViews.insert(permissionRow(
+            symbolName: "arrow.triangle.2.circlepath", title: "VM integrations",
+            detail: "Last check: \(integrationStatus?.summary ?? "Not checked yet"). Checked again after each VM launch.",
+            granted: false, statusLabels: ("", ""),
+            actions: [("REVIEW…", #selector(reviewIntegrations))]
+        ), at: 0)
 
         var permissionRowsAndSeparators: [NSView] = []
         for (index, row) in permissionRowViews.enumerated() {
