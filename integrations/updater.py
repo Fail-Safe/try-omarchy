@@ -136,7 +136,12 @@ def report():
 def verify_upgrade(installed_directory, incoming_directory):
     if not (installed_directory / 'manifest.json').is_file():
         return
-    installed = manifest(installed_directory)
+    installed = json.loads((installed_directory / 'manifest.json').read_text())
+    if installed.get('schema') != 1 or installed.get('version') != 1 or not isinstance(installed.get('files'), dict):
+        raise RuntimeError('The installed bundle needs a matching or newer updater.')
+    identity = hashlib.sha256(json.dumps(installed['files'], sort_keys=True).encode()).hexdigest()
+    if installed.get('identity') != identity:
+        raise RuntimeError('The installed bundle inventory cannot be verified; retain it and repair its manifest before retrying.')
     incoming = manifest(incoming_directory)
     if set(installed['files']) - set(incoming['files']):
         raise RuntimeError('The installed bundle contains additional integrations. Use a matching or newer app; this bundle will not remove their support.')

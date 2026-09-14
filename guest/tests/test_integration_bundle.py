@@ -50,6 +50,13 @@ class IntegrationBundleTests(unittest.TestCase):
         self.assertEqual(extra.read_text(), 'retained support')
         updater.verify_upgrade(self.bundle, self.bundle)
 
+    def test_matching_inventory_allows_repair_of_corrupt_installed_files(self):
+        import shutil
+        installed = self.bundle.parent / 'installed'
+        shutil.copytree(self.bundle, installed)
+        (installed / 'setup').write_text('damaged installed file')
+        updater.verify_upgrade(installed, self.bundle)
+
     def test_corruption_cannot_execute(self):
         (self.bundle / 'setup').write_text('changed')
         with self.assertRaisesRegex(RuntimeError, 'verification failed'):
