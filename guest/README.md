@@ -66,7 +66,8 @@ The kernel reboot check recognizes package-owned `modules.builtin` metadata as
 well as `vmlinuz` under `/usr/lib/modules/<release>/`. Arch Linux ARM does not
 place `vmlinuz` there, so requiring that file alone produces a false kernel-update
 prompt after every no-op update. A matching release suppresses that prompt;
-unrecognized layouts do not claim an update. Other reboot and service-restart
+unrecognized layouts report that kernel reboot status could not be determined
+instead of claiming either a match or an update. Other reboot and service-restart
 reasons still apply. This check ships as the `update-restart-arm-kernel` reviewed
 backport, with a fixture from the pinned upstream command for regression tests.
 

@@ -65,6 +65,11 @@ omarchy-restart-shell() { echo SHELL_RESTARTED; }
             self.assertIn("SERVICE_RESTARTED", completed.stdout)
             self.assertIn("SHELL_RESTARTED", completed.stdout)
             self.assertNotIn("UNEXPECTED_REBOOT", completed.stdout)
+            expected_unknown = not any(owned for _, _, owned in markers)
+            self.assertEqual(
+                "Unable to determine kernel reboot status" in completed.stderr,
+                expected_unknown,
+            )
             return completed.stdout
 
     def test_matching_arm_modules_without_vmlinuz_do_not_prompt(self):

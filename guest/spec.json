@@ -382,15 +382,15 @@
       },
       {
         "id": "update-restart-arm-kernel",
-        "description": "Recognize package-owned ARM kernel module metadata when checking for a required reboot, without treating unknown layouts as updates.",
+        "description": "Recognize package-owned ARM kernel module metadata and explicitly distinguish matching, changed, and unknown kernel reboot states.",
         "reference": "https://github.com/basecamp/omarchy/blob/346e69e1cec6c4e8924531874af6ba010a1bc99e/bin/omarchy-update-restart",
         "patch": "patches/omarchy/update-restart-arm-kernel.patch",
-        "patchSha256": "632a32ae673824a1de094156e0fd81d1c82a72f6aef25dc45ac53617002ab1a4",
+        "patchSha256": "e6cf6d70a8fdfb9e027f28a2c115918e4b8db4d827b249a2941ceb64975c7a47",
         "targets": [
           {
             "path": "bin/omarchy-update-restart",
             "beforeSha256": "7bc95f8a0a3ae35cfd81453e08194f5660c27cf59528c7d95b4345f362030b60",
-            "afterSha256": "d509ec49d59f7b74fd02bfabdda281cd8d94f952861b1de18700ba08098f1725"
+            "afterSha256": "c791af27312db4cf4f11ec4d112a3e4f50654d82143368166bf385c25f92f5d9"
           }
         ]
       },
