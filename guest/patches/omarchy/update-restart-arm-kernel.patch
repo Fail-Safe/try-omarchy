@@ -1,0 +1,20 @@
+diff --git a/bin/omarchy-update-restart b/bin/omarchy-update-restart
+--- a/bin/omarchy-update-restart
++++ b/bin/omarchy-update-restart
+@@ -9,10 +9,14 @@ confirm_reboot() {
+ }
+ 
+ running_kernel=$(uname -r)
+-kernel_updated=true
++kernel_updated=false
+ 
+-for kernel in /usr/lib/modules/*/vmlinuz; do
++# Arch Linux ARM installs its image outside the modules directory. Its
++# package-owned modules.builtin identifies the installed kernel release too.
++# No recognized package-owned marker means unknown, not an updated kernel.
++for kernel in /usr/lib/modules/*/vmlinuz /usr/lib/modules/*/modules.builtin; do
+   if [[ -f $kernel ]] && pacman -Qo "$kernel" &>/dev/null; then
++    kernel_updated=true
+     installed_kernel=$(basename "$(dirname "$kernel")")
+ 
+     if [[ $installed_kernel == $running_kernel ]]; then
