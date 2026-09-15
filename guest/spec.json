@@ -213,6 +213,7 @@
     "packages": "packages.txt",
     "packageLock": "packages.lock.json",
     "pacmanConfig": "pacman.aarch64.conf",
+    "packageRepositorySnapshot": "https://pkgmirror.sametimetomorrow.net/aarch64/repos/2026/09/15",
     "abiPackagePins": [
       {
         "name": "aquamarine",

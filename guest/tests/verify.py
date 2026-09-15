@@ -131,11 +131,11 @@ def main() -> None:
     )
     check(spec["runtime"]["storage"]["expandedSizeMiB"] == 24576, "working disk expands to 24 GiB")
     check(
-        set(spec["inputs"]) == {"packages", "packageLock", "pacmanConfig", "abiPackagePins"},
+        set(spec["inputs"]) == {"packages", "packageLock", "pacmanConfig", "abiPackagePins", "packageRepositorySnapshot"},
         "spec has a minimal input set",
     )
     for key, value in spec["inputs"].items():
-        if key == "abiPackagePins":
+        if key in {"abiPackagePins", "packageRepositorySnapshot"}:
             continue
         check((GUEST / value).is_file(), f"spec input exists: {value}")
     abi_pins = spec["inputs"]["abiPackagePins"]
