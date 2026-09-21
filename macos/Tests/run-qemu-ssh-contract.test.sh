@@ -110,7 +110,8 @@ fi
 if [[ ${1:-} == --bridge-native-audio \
    || ${1:-} == --bridge-native-authentication \
    || ${1:-} == --bridge-native-clipboard \
-   || ${1:-} == --bridge-native-camera ]]; then
+   || ${1:-} == --bridge-native-camera \
+   || ${1:-} == --bridge-native-battery ]]; then
   if [[ $1 == --bridge-native-audio && ${FAKE_AUDIO_EXIT_EARLY:-0} == 1 ]]; then
     exit 0
   fi
@@ -589,6 +590,10 @@ assert_contains "$disabled_qemu" \
 assert_contains "$disabled_qemu" \
   'virtserialport,bus=omarchy-serial.0,nr=3,chardev=omarchy-authentication-bridge,name=dev.tryomarchy.authentication'
 assert_contains "$disabled_qemu" \
+  'socket,id=omarchy-battery-bridge,path='
+assert_contains "$disabled_qemu" \
+  'virtserialport,bus=omarchy-serial.0,nr=7,chardev=omarchy-battery-bridge,name=dev.tryomarchy.battery'
+assert_contains "$disabled_qemu" \
   'virtserialport,bus=omarchy-serial.0,nr=6,chardev=omarchy-settings-bridge,name=dev.tryomarchy.settings'
 assert_contains "$disabled_qemu" \
   'virtserialport,bus=omarchy-serial.0,nr=5,chardev=omarchy-integrations,name=dev.tryomarchy.integrations'
@@ -605,7 +610,7 @@ for argument in pathlib.Path(sys.argv[1]).read_text().splitlines():
     port = (fields["bus"], fields["nr"])
     assert port not in ports, f"Duplicate virtual serial port: {port}"
     ports.add(port)
-assert len(ports) == 7, f"Expected all seven guest channels, got {ports}"
+assert len(ports) == 8, f"Expected all eight guest channels, got {ports}"
 PYPORTS
 assert_contains "$(<"$test_root/disabled/storage.log")" select-existing
 assert_contains "$(<"$test_root/disabled/storage.log")" create

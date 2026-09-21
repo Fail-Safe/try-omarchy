@@ -895,6 +895,26 @@ def main() -> None:
         and "com.apple.security.device.camera" in camera_entitlements,
         "Mac launcher carries the camera entitlement and supervised virtio bridge",
     )
+    battery = spec["runtime"]["battery"]
+    check(
+        battery
+        == {
+            "activation": "always-on",
+            "device": "virtserialport",
+            "direction": "host-to-guest",
+            "guestSupplies": ["ADP0", "BAT0"],
+            "port": "dev.tryomarchy.battery",
+            "protocolVersion": 1,
+        },
+        "battery contract mirrors the Mac battery one way over virtio",
+    )
+    battery_launcher = read(REPO / "macos/run-qemu-gpu.sh")
+    check(
+        "virtserialport,bus=omarchy-serial.0,nr=7,chardev=omarchy-battery-bridge,name=dev.tryomarchy.battery" in battery_launcher
+        and "--bridge-native-battery" in battery_launcher
+        and "battery_bridge_restarts < 5" in battery_launcher,
+        "Mac launcher carries the supervised battery virtio bridge",
+    )
     check(
         '"$root/usr/local/bin/omarchy-native-mac-share"' in configure
         and "default.target.wants/omarchy-native-mac-share-link.service" in configure,
@@ -930,11 +950,12 @@ def main() -> None:
         "pacman recovery files snapshot the final local-repository configuration",
     )
     check(
-        "expected_archive_count=6" in local_repository
+        "expected_archive_count=7" in local_repository
         and "factory repository is missing pinned ttfx" in local_repository
         and "factory repository is missing pinned yay" in local_repository
         and "factory repository is missing patched Hyprland" in local_repository
         and "factory repository is missing pinned Voxtype" in local_repository
+        and "factory repository is missing the battery DKMS module" in local_repository
         and "immutable local repository does not have priority" in local_repository
         and "resolve patched and ARM64-only packages locally" in local_repository
         and "refusing canonical unsafe root" in local_repository,
@@ -1509,6 +1530,102 @@ def main() -> None:
         and 'GROUP="root"' in authentication_rule
         and 'MODE="0600"' in authentication_rule,
         "Touch ID authorization port is root-only",
+    )
+    battery_bridge = GUEST / "native-overlay/usr/local/bin/omarchy-native-battery-bridge"
+    check(battery_bridge.stat().st_mode & stat.S_IXUSR != 0, "native battery bridge is executable")
+    with tempfile.TemporaryDirectory() as temporary:
+        py_compile.compile(str(battery_bridge), cfile=str(Path(temporary) / "battery.pyc"), doraise=True)
+    check(True, "native battery bridge compiles")
+    battery_unit = read(
+        GUEST / "native-overlay/usr/lib/systemd/system/omarchy-native-battery-bridge.service"
+    )
+    check(
+        "ConditionPathExists=/dev/virtio-ports/dev.tryomarchy.battery" in battery_unit
+        and "ConditionPathExists=/sys/devices/platform/try-omarchy-battery/state" in battery_unit
+        and "Restart=always" in battery_unit
+        and "StartLimitIntervalSec=0" in battery_unit,
+        "battery agent follows the virtio port and the module, and keeps retrying",
+    )
+    battery_rule = read(GUEST / "native-overlay/etc/udev/rules.d/95-omarchy-native-battery.rules")
+    check(
+        'ATTR{name}=="dev.tryomarchy.battery"' in battery_rule
+        and 'MODE="0600"' in battery_rule
+        and "GROUP=" not in battery_rule,
+        "battery port is root-only",
+    )
+    check(
+        read(GUEST / "native-overlay/etc/modules-load.d/95-try-omarchy-battery.conf").strip()
+        == "try_omarchy_battery",
+        "battery module loads at boot",
+    )
+    upower_dropin = read(GUEST / "native-overlay/etc/UPower/UPower.conf.d/90-try-omarchy.conf")
+    check(
+        "CriticalPowerAction=Ignore" in upower_dropin
+        and "AllowRiskyCriticalPowerAction=true" in upower_dropin,
+        "critical Mac battery warns without suspending the guest",
+    )
+    module_source = read(GUEST / "native-module/try-omarchy-battery/try-omarchy-battery.c")
+    check(
+        '.name = "BAT0"' in module_source
+        and '.name = "ADP0"' in module_source
+        and "DEVICE_ATTR_ADMIN_RW(state)" in module_source
+        and "power_supply_unregister" in module_source,
+        "battery module exposes BAT0/ADP0 behind a root-only state attribute",
+    )
+    dkms_conf = read(GUEST / "native-module/try-omarchy-battery/dkms.conf")
+    check(
+        'PACKAGE_VERSION="1.0.0"' in dkms_conf,
+        "battery module DKMS version matches the spec pin",
+    )
+    # DKMS always passes KERNELRELEASE on its make command line, which selects
+    # the Makefile's kbuild branch — a branch with no `modules` target. The
+    # build line must drive kbuild directly instead.
+    make_line = next(
+        (line for line in dkms_conf.splitlines() if line.startswith("MAKE[0]=")), ""
+    )
+    check(
+        "-C ${kernel_source_dir}" in make_line and " M=" in make_line,
+        "battery module DKMS build line drives kbuild directly",
+    )
+    finalize = read(GUEST / "scripts/finalize-rootfs.sh")
+    check(
+        "systemctl enable omarchy-native-battery-bridge.service" in finalize,
+        "battery agent is enabled in the factory image",
+    )
+    configure = read(GUEST / "scripts/configure-rootfs.sh")
+    check(
+        "omarchy-native-battery-bridge" in configure,
+        "battery agent is made executable during rootfs configuration",
+    )
+    retrofit = read(GUEST / "scripts/install-battery-into-existing-guest.sh")
+    check(
+        "dkms install try-omarchy-battery/1.0.0" in retrofit
+        and "systemctl enable --now omarchy-native-battery-bridge.service" in retrofit
+        and "curl" not in retrofit,
+        "existing guests retrofit the battery from staged files, never the network",
+    )
+    retrofit_destinations = [
+        "/usr/src/try-omarchy-battery-1.0.0/try-omarchy-battery.c",
+        "/usr/src/try-omarchy-battery-1.0.0/Makefile",
+        "/usr/src/try-omarchy-battery-1.0.0/dkms.conf",
+        "/usr/local/bin/omarchy-native-battery-bridge",
+        "/usr/lib/systemd/system/omarchy-native-battery-bridge.service",
+        "/etc/udev/rules.d/95-omarchy-native-battery.rules",
+        "/etc/modules-load.d/95-try-omarchy-battery.conf",
+        "/etc/UPower/UPower.conf.d/90-try-omarchy.conf",
+    ]
+    check(
+        all(destination in retrofit for destination in retrofit_destinations),
+        "retrofit script installs all eight battery files to their real system paths",
+    )
+    check(
+        retrofit.index("dkms install try-omarchy-battery/1.0.0")
+        < retrofit.index("systemctl enable --now omarchy-native-battery-bridge.service"),
+        "retrofit script builds the DKMS module before enabling the service that depends on it",
+    )
+    check(
+        "set -euo pipefail" in retrofit,
+        "retrofit script aborts on the first failure instead of limping into a half-installed state",
     )
     mac_share = GUEST / "native-overlay/usr/local/bin/omarchy-native-mac-share"
     check(mac_share.stat().st_mode & stat.S_IXUSR != 0, "native Mac share mounter is executable")
