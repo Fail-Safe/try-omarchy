@@ -464,6 +464,20 @@
             "afterSha256": "22062e6fc14f8405d3da23f2edc892fc22dcaf51ed4c944ee5d7c0fc3b0992bd"
           }
         ]
+      },
+      {
+        "id": "keyboard-us-acentos",
+        "description": "Add US International with dead keys and distinguish the Brazilian ABNT2 keyboard option.",
+        "reference": "https://github.com/omacom/try-omarchy/issues/194",
+        "patch": "patches/omarchy/keyboard-us-acentos.patch",
+        "patchSha256": "e81e1bd6b23816ecc2d2360b446e29c27947314d3cc5b3181d38982b8c16ec0d",
+        "targets": [
+          {
+            "path": "install/provisioning/setup-form.sh",
+            "beforeSha256": "0fbb8c3c8b151e5ff884c16d381e12fda53cc16adfd08a684d41e7327250665d",
+            "afterSha256": "5e2288809a3d9cc2cf91ca955be97b5fdcf6e786b7e8e3be6ea1a1b19abda15c"
+          }
+        ]
       }
     ],
     "postBuildUserInstallers": [
