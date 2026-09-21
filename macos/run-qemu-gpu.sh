@@ -1180,17 +1180,32 @@ reap_stale_work_dirs() {
     launcher_command=$(printf '%s\n' "$process_snapshot" | awk -v pid="$launcher_pid" '$1 == pid { $1=""; print }')
     [[ $launcher_command != *"run-qemu-gpu.sh"* ]] || continue
 
+    stale_qemu_pid=""
     qemu_marker="$candidate/.qemu.pid"
     if [[ -f $qemu_marker && ! -L $qemu_marker ]]; then
       stale_qemu_pid=$(<"$qemu_marker")
-      if [[ $stale_qemu_pid =~ ^[0-9]+$ ]]; then
-        qemu_command=$(printf '%s\n' "$process_snapshot" | awk -v pid="$stale_qemu_pid" '$1 == pid { $1=""; print }')
-        if [[ $qemu_command == *"$qemu_bin"* &&
-              $qemu_command == *"unix:/tmp/${candidate##*/}/qmp.sock"* ]]; then
-          continue
-        fi
+      [[ $stale_qemu_pid =~ ^[0-9]+$ ]] || continue
+      qemu_command=$(printf '%s\n' "$process_snapshot" | awk -v pid="$stale_qemu_pid" '$1 == pid { $1=""; print }')
+      if [[ $qemu_command == *"$qemu_bin"* &&
+            $qemu_command == *"unix:/tmp/${candidate##*/}/qmp.sock"* ]]; then
+        continue
       fi
     fi
+
+    # A failed ps is not evidence that a process exited. Obtain a complete UID
+    # inventory after reading the marker, and prove it contains this launcher.
+    local process_ids="" inspected_pid="" inspection_valid=0 run_is_alive=0
+    if ! process_ids=$(ps -U "$(id -u)" -o pid= 2>/dev/null); then
+      continue
+    fi
+    while read -r inspected_pid; do
+      [[ $inspected_pid =~ ^[0-9]+$ ]] || continue
+      [[ $inspected_pid != "$$" ]] || inspection_valid=1
+      if [[ $inspected_pid == "$launcher_pid" || $inspected_pid == "$stale_qemu_pid" ]]; then
+        run_is_alive=1
+      fi
+    done <<<"$process_ids"
+    (( inspection_valid == 1 && run_is_alive == 0 )) || continue
 
     echo "[qemu-gpu] Removing a verified stale disposable run: $candidate" >&2
     /bin/rm -rf "$candidate"
