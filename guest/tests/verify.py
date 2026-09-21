@@ -453,6 +453,10 @@ def main() -> None:
         "rpm-tools" in requested_packages and "rpm-tools" in packages,
         "factory transaction includes the RPM signature verifier for Vivaldi",
     )
+    check(
+        "man-db" in requested_packages and "man-db" in packages,
+        "browser help probes have the man command available in the factory",
+    )
     yay = spec.get("supplyChain", {}).get("yay", {})
     check(
         set(yay)
