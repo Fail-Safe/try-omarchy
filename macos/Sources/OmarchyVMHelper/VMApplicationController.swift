@@ -64,6 +64,8 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
     private let deviceProvider: HostAudioDeviceProviding
     private let bundledMetrics: BundledGuestMetrics?
     private var startMenuWindow: StartMenuWindow?
+    private let appReleaseChecker = AppReleaseChecker()
+    private var appReleaseWindow: AppReleaseWindow?
     private var volumeObserver: NSObjectProtocol?
     private var hostPowerObserver: HostPowerNotificationObserver?
     private let hostSleepCoordinator = VMHostSleepCoordinator()
@@ -126,9 +128,21 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        appReleaseChecker.onChange = { [weak self] in
+            self?.startMenuWindow?.refreshAppReleaseStatus()
+            self?.appReleaseWindow?.refresh()
+        }
         observeVolumeUnmounts()
         observeHostPowerEvents()
         showStartMenu()
+        appReleaseChecker.checkAutomaticallyIfDue()
+    }
+
+    @objc func checkForAppUpdates(_ sender: Any?) {
+        if appReleaseWindow == nil {
+            appReleaseWindow = AppReleaseWindow(checker: appReleaseChecker)
+        }
+        appReleaseWindow?.show()
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -234,6 +248,11 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
                     FullscreenPreferences(isImmersive: isImmersive)
                 )
             },
+            appVersionLabel: appReleaseChecker.installed.label,
+            appReleaseActionTitle: { [weak self] in
+                self?.appReleaseChecker.menuTitle ?? "Check for Updates…"
+            },
+            checkForAppUpdates: { [weak self] in self?.checkForAppUpdates(nil) },
             languageStatus: { [weak self] in
                 LanguageMenuState.make(
                     preference: self?.languagePreferenceStore.load() ?? .systemDefault,

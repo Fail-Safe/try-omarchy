@@ -175,6 +175,10 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
     private let setLanguage: (String?) -> Void
     private let integrationCacheURL: () -> URL?
     private let launch: () -> Void
+    private let appVersionLabel: String
+    private let appReleaseActionTitle: () -> String
+    private let checkForAppUpdates: () -> Void
+    private weak var appReleaseButton: NSButton?
     private let canResetStorage: Bool
     private let storageLocation: () -> String?
     private let storageLocationURL: () -> URL?
@@ -263,6 +267,9 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         networkIdentity: VMNetworkIdentityAccess = .unavailable,
         immersiveMode: @escaping () -> Bool = { true },
         setImmersiveMode: @escaping (Bool) -> Void = { _ in },
+        appVersionLabel: String = InstalledAppRelease.current.label,
+        appReleaseActionTitle: @escaping () -> String = { "Check for Updates…" },
+        checkForAppUpdates: @escaping () -> Void = {},
         languageStatus: @escaping () -> LanguageMenuState = { .systemDefault },
         setLanguage: @escaping (String?) -> Void = { _ in },
         integrationCacheURL: @escaping () -> URL? = { nil },
@@ -300,6 +307,9 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         self.setLanguage = setLanguage
         self.integrationCacheURL = integrationCacheURL
         self.launch = launch
+        self.appVersionLabel = appVersionLabel
+        self.appReleaseActionTitle = appReleaseActionTitle
+        self.checkForAppUpdates = checkForAppUpdates
 
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 832),
@@ -324,6 +334,12 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
+
+    func refreshAppReleaseStatus() {
+        appReleaseButton?.title = appReleaseActionTitle()
+    }
+
+    @objc private func showAppUpdates() { checkForAppUpdates() }
 
     func prepareForPresentation(visibleFrame: NSRect?) {
         let scrollOffset = startMenuScrollView?.contentView.bounds.origin.y ?? 0
@@ -486,7 +502,22 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         subtitle.font = .monospacedSystemFont(ofSize: 10, weight: .semibold)
         subtitle.textColor = OmarchyStartMenuTheme.accent
 
-        let titleStack = NSStackView(views: [title, subtitle])
+        let version = NSTextField(labelWithString: appVersionLabel)
+        version.font = .systemFont(ofSize: 11)
+        version.textColor = OmarchyStartMenuTheme.muted
+        version.lineBreakMode = .byTruncatingMiddle
+        version.toolTip = appVersionLabel
+        version.identifier = NSUserInterfaceItemIdentifier("app-version")
+        version.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let updates = NSButton(title: appReleaseActionTitle(), target: self, action: #selector(showAppUpdates))
+        updates.isBordered = false
+        updates.font = .systemFont(ofSize: 11)
+        updates.contentTintColor = OmarchyStartMenuTheme.accent
+        updates.identifier = NSUserInterfaceItemIdentifier("app-release-check")
+        appReleaseButton = updates
+        let versionRow = NSStackView(views: [version, updates])
+        versionRow.spacing = 10
+        let titleStack = NSStackView(views: [title, subtitle, versionRow])
         titleStack.orientation = .vertical
         titleStack.alignment = .leading
         titleStack.spacing = 3
@@ -878,6 +909,7 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
             stack.trailingAnchor.constraint(equalTo: document.trailingAnchor, constant: -42),
             stack.topAnchor.constraint(equalTo: document.topAnchor, constant: 26),
             stack.bottomAnchor.constraint(equalTo: document.bottomAnchor),
+            headingStack.widthAnchor.constraint(equalTo: stack.widthAnchor),
             permissionCard.widthAnchor.constraint(equalTo: stack.widthAnchor),
             integrationCard.widthAnchor.constraint(equalTo: stack.widthAnchor),
             resetCard.widthAnchor.constraint(equalTo: stack.widthAnchor),
