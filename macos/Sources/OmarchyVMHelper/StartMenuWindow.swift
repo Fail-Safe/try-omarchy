@@ -167,6 +167,7 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
     private let saveResources: (VMResources) -> Void
     private let networkPreferences: () -> VMNetworkPreferences
     private let saveNetworkPreferences: (VMNetworkPreferences) -> String?
+    private let networkIdentity: VMNetworkIdentityAccess
     private var networkEditor: NetworkEditor?
     private let immersiveMode: () -> Bool
     private let setImmersiveMode: (Bool) -> Void
@@ -259,6 +260,7 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         saveResources: @escaping (VMResources) -> Void = { _ in },
         networkPreferences: @escaping () -> VMNetworkPreferences = { VMNetworkPreferences() },
         saveNetworkPreferences: @escaping (VMNetworkPreferences) -> String? = { _ in nil },
+        networkIdentity: VMNetworkIdentityAccess = .unavailable,
         immersiveMode: @escaping () -> Bool = { true },
         setImmersiveMode: @escaping (Bool) -> Void = { _ in },
         languageStatus: @escaping () -> LanguageMenuState = { .systemDefault },
@@ -291,6 +293,7 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         self.saveResources = saveResources
         self.networkPreferences = networkPreferences
         self.saveNetworkPreferences = saveNetworkPreferences
+        self.networkIdentity = networkIdentity
         self.immersiveMode = immersiveMode
         self.setImmersiveMode = setImmersiveMode
         self.languageStatus = languageStatus
@@ -1437,7 +1440,7 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         guard !launchInProgress, !resetInProgress, networkEditor == nil else { return }
         permissionWindowRestorer.cancel()
         let editor = NetworkEditor(preferences: networkPreferences(), interfaces: VMBridgeInterfaces.available(),
-            save: saveNetworkPreferences, didClose: { [weak self] in
+            identity: networkIdentity, save: saveNetworkPreferences, didClose: { [weak self] in
                 self?.networkEditor = nil
                 self?.render()
             })

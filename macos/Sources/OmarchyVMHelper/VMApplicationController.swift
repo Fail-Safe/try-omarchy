@@ -221,6 +221,11 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
                 do { try self?.networkStore.save(preferences); return nil }
                 catch { return error.localizedDescription }
             },
+            networkIdentity: VMNetworkIdentityAccess.forLaunch(arguments: initialArguments,
+                operation: { [weak self] arguments in
+                    guard let self else { throw HelperError.io("The VM controller is unavailable.") }
+                    return try self.networkIdentityOperation(arguments)
+                }),
             immersiveMode: { [weak self] in
                 self?.fullscreenPreferenceStore.load().isImmersive ?? true
             },
@@ -423,6 +428,18 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
         /// Set when a chosen data folder could not be validated. Starting the
         /// launcher anyway would silently retarget the default workspace.
         let storageUnavailableReason: String?
+    }
+
+    private func networkIdentityOperation(_ arguments: [String]) throws -> String {
+        let context = childLaunchContext()
+        if let error = context.storageUnavailableReason { throw HelperError.io(error) }
+        guard let root = QEMUGPUStorageSpaceEstimate.storageRootURL(
+            environment: context.environment, preference: storageLocationStore.load()),
+              let resources = Bundle.main.resourceURL else {
+            throw HelperError.io("The VM data folder is unavailable.")
+        }
+        return try VMNetworkIdentityAccess.operation(arguments, root: root, resources: resources,
+            environment: context.environment, bundleIdentity: bundledMetrics?.identity)
     }
 
     private func resolvedNetworkPreferences() -> VMNetworkPreferences {

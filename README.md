@@ -215,6 +215,24 @@ bridged launches do not request your password. QEMU continues to run as your
 user. **Remove Networking Helper** unregisters the service when it is no longer
 needed. Shut down any bridged VM before repairing or removing the helper.
 
+Persistent VMs keep a stable, randomly generated bridged MAC address across app
+updates, disk replacement, resizing, resets, and moves of the complete VM data
+folder. Existing saved addresses are retained when upgrading from older builds.
+The Networking sheet displays the address after the first bridged launch;
+**Copy MAC** makes it available for a DHCP reservation. **Generate new MAC…**
+shows a proposed address and requires confirmation while the VM is stopped.
+This action saves immediately; DHCP reservations may need updating. Cancelling
+the confirmation leaves the existing identity unchanged.
+
+A copy of the complete VM data folder includes its network identity. To run a
+copy as a separate VM, generate a new MAC before running both copies. Move or
+restore the complete data folder to retain the identity; importing only a disk
+into a new workspace does not transfer its network identity. Ephemeral bridged
+VMs receive a fresh address on each launch. Damaged identity records produce an
+error instead of silently changing the MAC. Migration and regeneration retain
+the preceding record as `network-identities/current.previous.json` in the VM
+data folder; restore a known-good record only with the VM stopped.
+
 For repeated local development builds, use a consistent Apple Development
 signing identity (the `DEVELOPMENT_SIGN_IDENTITY` option above). Ad-hoc-signed
 helper registrations are not reliable across rebuilds on the tested macOS
