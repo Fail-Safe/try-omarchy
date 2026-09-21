@@ -6,7 +6,7 @@ guest file. The builder config must:
   - expose ABI pins rebuilt from reviewed upstream source + Arch PKGBUILD
   - omit those pin names from IgnorePkg so pacstrap can install them once
   - keep optional signed packageCachePins ahead of rolling mirrors
-  - use the dated ARM snapshot without changing the installed guest mirrors
+  - use the selected ARM mirror without changing the installed guest mirrors
 
 [try-omarchy-abi-pins] is unsigned because repo-add writes an unsigned database
 for the just-built package. Origin is the reproducible rebuild, not TrustAll.
@@ -105,7 +105,7 @@ def write_builder_config(
     abi_repo: Path | None,
     pinned_cache_repo: Path | None,
     drop_ignore: set[str],
-    repository_snapshot: str | None = None,
+    repository_mirrors: list[str] | None = None,
 ) -> None:
     lines = guest_config.read_text().splitlines()
     options_sections = 0
@@ -117,19 +117,17 @@ def write_builder_config(
         section = SECTION_RE.fullmatch(line)
         if section:
             repository = section.group(1)
-        # External downloaders need the invoking builder user's access to the
-        # temporary database, cache, and locally rebuilt package repositories.
-        if repository_snapshot and line.startswith("DownloadUser"):
+        # Local package repositories live in private build directories, so the
+        # downloader must keep the invoking builder user's access to them.
+        if repository_mirrors and line.startswith("DownloadUser"):
             continue
-        # The archive limits concurrent requests more strictly than live mirrors.
-        if repository_snapshot and line.startswith("ParallelDownloads"):
-            line = "ParallelDownloads = 1"
         if (
-            repository_snapshot
+            repository_mirrors
             and repository in {"core", "extra", "alarm", "aur"}
             and line.startswith("Include =")
         ):
-            line = f"Server = {repository_snapshot}/$repo"
+            out.extend(f"Server = {mirror}/$repo" for mirror in repository_mirrors)
+            continue
         if section and section.group(1) != "options":
             if abi_repo is not None and not abi_inserted:
                 out.extend(
@@ -159,13 +157,6 @@ def write_builder_config(
 
         if line == "[options]":
             options_sections += 1
-            if repository_snapshot:
-                # curl honors Retry-After for HTTP 429; pacman's downloader
-                # otherwise aborts the transaction on an archive rate limit.
-                out.append(
-                    "XferCommand = /usr/bin/curl --fail --location --silent --show-error "
-                    "--retry 8 --retry-delay 3 --connect-timeout 30 --output %o %u"
-                )
             if package_cache is not None:
                 out.append(f"CacheDir = {package_cache}")
             if disable_sandbox:
@@ -197,12 +188,17 @@ def main() -> None:
     spec = json.loads(args.spec.read_text())
     lock_packages = json.loads(args.package_lock.read_text())["packages"]
     pins = load_abi_pins(spec, lock_packages)
-    repository_snapshot = spec.get("inputs", {}).get("packageRepositorySnapshot")
-    if repository_snapshot is not None and not re.fullmatch(
-        r"https://pkgmirror\.sametimetomorrow\.net/aarch64/repos/\d{4}/\d{2}/\d{2}",
-        repository_snapshot,
+    repository_mirrors = spec.get("inputs", {}).get("packageRepositoryMirrors")
+    if repository_mirrors is not None and (
+        not isinstance(repository_mirrors, list)
+        or not repository_mirrors
+        or any(
+            not isinstance(mirror, str)
+            or not re.fullmatch(r"https://[a-z0-9.-]+/aarch64", mirror)
+            for mirror in repository_mirrors
+        )
     ):
-        fail("packageRepositorySnapshot must be a dated ARM archive URL")
+        fail("packageRepositoryMirrors must contain HTTPS ARM mirror URLs")
 
     abi_repo = args.abi_repo
     if pins:
@@ -220,7 +216,7 @@ def main() -> None:
         abi_repo=abi_repo if pins else None,
         pinned_cache_repo=args.pinned_cache_repo,
         drop_ignore={pin["name"] for pin in pins},
-        repository_snapshot=repository_snapshot,
+        repository_mirrors=repository_mirrors,
     )
 
 

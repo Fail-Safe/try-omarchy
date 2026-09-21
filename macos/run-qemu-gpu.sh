@@ -598,7 +598,7 @@ exact_keys(
 hyprland_identity = hashlib.sha256(
     json.dumps(hyprland, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode("utf-8")
 ).hexdigest()
-if hyprland_identity != "ae82ce3f989eff555f1faa2400ff0ecb3d7b52b4797c6e3f4fca29959e5a7790":
+if hyprland_identity != "f41042613023280c808d5bf6258f2f71c1b20d0755f894b53e77defe97db42a7":
     fail("factory Hyprland component is not the reviewed rounded-border build")
 aquamarine = exact_keys(
     supply_chain.get("aquamarine"),
@@ -618,19 +618,19 @@ aquamarine = exact_keys(
     "build spec aquamarine component",
 )
 if aquamarine != {
-    "version": "0.14.0",
-    "pkgrel": "2",
+    "version": "0.15.1",
+    "pkgrel": "1",
     "repository": "https://github.com/hyprwm/aquamarine",
-    "url": "https://github.com/hyprwm/aquamarine/archive/v0.14.0/aquamarine-0.14.0.tar.gz",
-    "sha256": "5dcf0b17f7dd51539fd7e79d68484f04240b3b63cf9f5f21d5b6dea0088168f9",
+    "url": "https://github.com/hyprwm/aquamarine/archive/v0.15.1/aquamarine-0.15.1.tar.gz",
+    "sha256": "2f9de98c0bd1b7b1b09c576e390a2fef436449762fb334163c414f0c300296f2",
     "pkgbuild": "pinned-packages/aquamarine/PKGBUILD",
-    "pkgbuildSha256": "1bd4197238a4f0092216ab2dfd723126d618cceb977d45865e140a488a8f56ff",
+    "pkgbuildSha256": "90c998ea89b5c806919c102df78ef3f0d7816a9a08c26eac26b4adf44ba59a2a",
     "packagingRepository": "https://gitlab.archlinux.org/archlinux/packaging/packages/aquamarine.git",
     "packagingCommit": "8489a8358817a964a923f05ba324996378d81a5d",
     "license": "BSD-3-Clause",
-    "binarySha256": "7da003aa60e008e9f514c312f01c1e967983e2c46732d58953735bfaee3fd8aa",
+    "binarySha256": "1fb6a90079a1f5620f9441d3e8a92426d21c6bbbab2f1ac070651425dae4129d",
 }:
-    fail("factory aquamarine component is not the reviewed libaquamarine.so=13 rebuild")
+    fail("factory aquamarine component is not the reviewed libaquamarine.so=14 rebuild")
 hyprtoolkit = exact_keys(
     supply_chain.get("hyprtoolkit"),
     set(aquamarine),
@@ -638,18 +638,18 @@ hyprtoolkit = exact_keys(
 )
 if hyprtoolkit != {
     "version": "0.5.4",
-    "pkgrel": "6.1",
+    "pkgrel": "6.2",
     "repository": "https://github.com/hyprwm/hyprtoolkit",
     "url": "https://github.com/hyprwm/hyprtoolkit/archive/v0.5.4/hyprtoolkit-0.5.4.tar.gz",
     "sha256": "2fb59789f231c1c4e9154ceffc1e7524c0cae154807c0d57e6166806255b570f",
     "pkgbuild": "pinned-packages/hyprtoolkit/PKGBUILD",
-    "pkgbuildSha256": "803f1db19ad1d42e48b638e35256d3dabbe19d1d0b4b3fd584eedf20121256ce",
+    "pkgbuildSha256": "28c3dabce8c9553cfe283d23f568551d48efa7d51d14658cc8522d5473dd73a6",
     "packagingRepository": "https://gitlab.archlinux.org/archlinux/packaging/packages/hyprtoolkit.git",
     "packagingCommit": "1ed230388a2ccb2c857af980235cf25a4f86e39e",
     "license": "BSD-3-Clause",
-    "binarySha256": "dc814fad9723bfcf66dbd29b7f8c5cc96fd63a1ff623909e466dd9d011c0cba8"
+    "binarySha256": "d901177e32b02d6769f5bcf118e43b22061a5a21a3aa77ee72469d4a2db85895"
 }:
-    fail("factory hyprtoolkit component is not the reviewed libaquamarine.so=13 rebuild")
+    fail("factory hyprtoolkit component is not the reviewed libaquamarine.so=14 rebuild")
 mise = exact_keys(
     supply_chain.get("mise"),
     {"binarySha256", "license", "reportedVersion", "sha256", "url", "version"},
@@ -1445,6 +1445,7 @@ audio_bridge_socket="/tmp/${work_dir##*/}/audio.sock"
 authentication_bridge_socket="/tmp/${work_dir##*/}/authentication.sock"
 camera_bridge_socket="/tmp/${work_dir##*/}/camera.sock"
 clipboard_bridge_socket="/tmp/${work_dir##*/}/clipboard.sock"
+settings_bridge_socket="/tmp/${work_dir##*/}/settings.sock"
 integration_bridge_socket="/tmp/${work_dir##*/}/integrations.sock"
 audio_route_dir="/tmp/${work_dir##*/}/audio-routes"
 mkdir -m 700 "$work_dir/audio-routes"
@@ -1554,6 +1555,16 @@ case ${OMARCHY_QEMU_GPU_IMMERSIVE:-1} in
   *) fail "OMARCHY_QEMU_GPU_IMMERSIVE must be 0 or 1" ;;
 esac
 
+# systemd's boot credential creates one temporary service without replacing
+# the guest's default target or requiring an agent to already be installed.
+settings_payload="$resources_dir/guest-settings"
+[[ -f $settings_payload/guest-settings.service && -f $settings_payload/install.py ]] || \
+  fail "the bundled settings integration is missing"
+settings_unit=$(base64 < "$settings_payload/guest-settings.service" | tr -d '\r\n')
+settings_kernel_argument=" systemd.set_credential_binary=systemd.extra-unit.try-omarchy-settings.service:$settings_unit systemd.wants=try-omarchy-settings.service"
+# QEMU escapes commas in key-value option values by doubling them.
+settings_payload_escaped=${settings_payload//,/,,}
+
 # macOS 15 can pass the paused EL2 probe, then abort with HV_BAD_ARGUMENT when
 # QEMU synchronizes vCPU registers (#211). Keep it on the platform-GIC/EL1 path.
 # On macOS 26+, probe actual Hypervisor.framework support for EL2 rather than
@@ -1627,7 +1638,7 @@ qemu_args=(
   -qmp "unix:$qmp_socket,server=on,wait=off"
   -kernel "$launch_kernel"
   -initrd "$launch_initramfs"
-  -append "$launch_kernel_command_line omarchy.qemu_virgl=1 omarchy.virgl_dual_source=1$shared_folder_kernel_argument$ssh_kernel_argument$keyboard_kernel_argument$locale_kernel_argument"
+  -append "$launch_kernel_command_line omarchy.qemu_virgl=1 omarchy.virgl_dual_source=1$shared_folder_kernel_argument$ssh_kernel_argument$settings_kernel_argument$keyboard_kernel_argument$locale_kernel_argument"
   -drive "if=none,id=omarchy-root,file=$working_disk,format=raw,media=disk,cache=writeback"
   -device 'virtio-blk-pci,drive=omarchy-root,serial=omarchy-root'
   -device "$gpu_device"
@@ -1643,7 +1654,11 @@ qemu_args=(
   -object 'rng-random,id=omarchy-rng,filename=/dev/urandom'
   -device 'virtio-rng-pci,rng=omarchy-rng'
   -device virtio-balloon-pci
+  -fsdev "local,id=omarchy-settings,path=$settings_payload_escaped,security_model=none,readonly=on"
+  -device 'virtio-9p-pci,fsdev=omarchy-settings,mount_tag=try-omarchy-settings,romfile='
   -device 'virtio-serial-pci,id=omarchy-serial'
+  -chardev "socket,id=omarchy-settings-bridge,path=$settings_bridge_socket,server=on,wait=off"
+  -device 'virtserialport,bus=omarchy-serial.0,nr=6,chardev=omarchy-settings-bridge,name=dev.tryomarchy.settings'
   -chardev "stdio,id=omarchy-hvc0,signal=off,logfile=$console_log_option,logappend=off"
   -device 'virtconsole,bus=omarchy-serial.0,nr=0,chardev=omarchy-hvc0'
   -chardev "socket,id=omarchy-audio-bridge,path=$audio_bridge_socket,server=on,wait=off"
@@ -1729,7 +1744,7 @@ printf '%s\n' "$qemu_pid" >"$work_dir/.qemu.pid"
 chmod 600 "$work_dir/.qemu.pid"
 
 for ((attempt = 0; attempt < 100; attempt++)); do
-  if [[ -S $qmp_socket && -S $audio_bridge_socket && -S $authentication_bridge_socket && -S $camera_bridge_socket && -S $clipboard_bridge_socket ]]; then
+  if [[ -S $qmp_socket && -S $audio_bridge_socket && -S $authentication_bridge_socket && -S $camera_bridge_socket && -S $clipboard_bridge_socket && -S $settings_bridge_socket ]]; then
     break
   fi
   kill -0 "$qemu_pid" 2>/dev/null || fail "QEMU exited before creating its private QMP socket"
@@ -1740,6 +1755,7 @@ done
 [[ -S $authentication_bridge_socket ]] || fail "QEMU did not create its private authentication bridge socket"
 [[ -S $camera_bridge_socket ]] || fail "QEMU did not create its private camera bridge socket"
 [[ -S $clipboard_bridge_socket ]] || fail "QEMU did not create its private clipboard bridge socket"
+[[ -S $settings_bridge_socket ]] || fail "QEMU did not create its private settings bridge socket"
 # The socket file appears before QEMU's main loop accepts connections, and the
 # helper tears the VM down if the monitor behind this line does not answer.
 # Use the bundled helper so release launches do not depend on host Python.
@@ -1802,9 +1818,14 @@ fi
 
 # Bash 3.2 has no `wait -n`. The native-audio bridge is required for the guest
 # transport, so watch it alongside QEMU and fail if it exits unexpectedly.
+qemu_is_running() {
+  local state
+  state=$(ps -p "$qemu_pid" -o state= 2>/dev/null || true)
+  [[ -n $state && $state != *Z* ]]
+}
+
 while true; do
-  qemu_state=$(ps -p "$qemu_pid" -o state= 2>/dev/null || true)
-  [[ -n $qemu_state && $qemu_state != *Z* ]] || break
+  qemu_is_running || break
 
   if [[ $QEMU_NETWORK_MODE == bridged && -f $QEMU_NETWORK_DIRECTORY/failed ]]; then
     cat "$QEMU_NETWORK_DIRECTORY/log" >&2
@@ -1821,13 +1842,14 @@ while true; do
       audio_bridge_status=$?
     fi
     audio_bridge_pid=""
-    # QEMU can exit between the process checks, taking the bridge down normally.
-    for ((attempt = 0; attempt < 20; attempt++)); do
-      qemu_state=$(ps -p "$qemu_pid" -o state= 2>/dev/null || true)
-      [[ -n $qemu_state && $qemu_state != *Z* ]] || break
+    # QEMU closes its channels before its process finishes exiting. Give that
+    # teardown a short grace period, then use QEMU's real exit status below.
+    # A bridge failure while QEMU stays alive must still fail the launch.
+    for ((attempt = 0; attempt < 40; attempt++)); do
+      qemu_is_running || break
       sleep 0.05
     done
-    [[ -n $qemu_state && $qemu_state != *Z* ]] || break
+    qemu_is_running || break
     fail "native audio bridge exited while QEMU was running (status $audio_bridge_status)"
   fi
 
@@ -1846,6 +1868,7 @@ while true; do
         clipboard_bridge_restarts=$((clipboard_bridge_restarts + 1))
         echo "[qemu-gpu] clipboard bridge exited (status $clipboard_bridge_status); restarting ($clipboard_bridge_restarts/5)" >&2
         sleep 1
+        qemu_is_running || break
         start_clipboard_bridge
       else
         echo "[qemu-gpu] clipboard sharing is unavailable for the rest of this session" >&2
@@ -1888,6 +1911,7 @@ while true; do
         camera_bridge_restarts=$((camera_bridge_restarts + 1))
         echo "[qemu-gpu] camera bridge exited (status $camera_bridge_status); restarting ($camera_bridge_restarts/5)" >&2
         sleep 1
+        qemu_is_running || break
         start_camera_bridge
       else
         echo "[qemu-gpu] camera sharing is unavailable for the rest of this session" >&2

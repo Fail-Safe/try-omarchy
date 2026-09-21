@@ -131,17 +131,26 @@ def main() -> None:
     )
     check(spec["runtime"]["storage"]["expandedSizeMiB"] == 24576, "working disk expands to 24 GiB")
     check(
-        set(spec["inputs"]) == {"packages", "packageLock", "pacmanConfig", "abiPackagePins", "packageRepositorySnapshot"},
+        set(spec["inputs"]) == {"packages", "packageLock", "pacmanConfig", "abiPackagePins", "packageRepositoryMirrors"},
         "spec has a minimal input set",
     )
     for key, value in spec["inputs"].items():
-        if key in {"abiPackagePins", "packageRepositorySnapshot"}:
+        if key in {"abiPackagePins", "packageRepositoryMirrors"}:
             continue
         check((GUEST / value).is_file(), f"spec input exists: {value}")
+    for name, digest in {
+        "omarchy.gpg": "15d6aac44df688165b2ea35fe0b23af239bbc66a6909c10a5c219e8d94b707de",
+        "omarchy-trusted": "ab0b688815444cffd48d15ca3597c77dbb364d59763c5784fca36691520f00fd",
+        "omarchy-revoked": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    }.items():
+        check(
+            hashlib.sha256((GUEST / "keys" / name).read_bytes()).hexdigest() == digest,
+            f"{name} matches the pinned upstream Omarchy packaging keyring",
+        )
     abi_pins = spec["inputs"]["abiPackagePins"]
     check(
-        abi_pins == [{"name": "aquamarine", "version": "0.14.0-2"}, {"name": "hyprtoolkit", "version": "0.5.4-6.1"}],
-        "factory abi pins keep aquamarine on libaquamarine.so=13 for the locked Hyprland",
+        abi_pins == [{"name": "aquamarine", "version": "0.15.1-1"}, {"name": "hyprtoolkit", "version": "0.5.4-6.2"}],
+        "factory abi pins keep aquamarine on libaquamarine.so=14 for the locked Hyprland",
     )
     aquamarine = spec.get("supplyChain", {}).get("aquamarine", {})
     pkgbuild = GUEST / aquamarine.get("pkgbuild", "")
@@ -149,40 +158,40 @@ def main() -> None:
     check(
         aquamarine
         == {
-            "version": "0.14.0",
-            "pkgrel": "2",
+            "version": "0.15.1",
+            "pkgrel": "1",
             "repository": "https://github.com/hyprwm/aquamarine",
-            "url": "https://github.com/hyprwm/aquamarine/archive/v0.14.0/aquamarine-0.14.0.tar.gz",
-            "sha256": "5dcf0b17f7dd51539fd7e79d68484f04240b3b63cf9f5f21d5b6dea0088168f9",
+            "url": "https://github.com/hyprwm/aquamarine/archive/v0.15.1/aquamarine-0.15.1.tar.gz",
+            "sha256": "2f9de98c0bd1b7b1b09c576e390a2fef436449762fb334163c414f0c300296f2",
             "pkgbuild": "pinned-packages/aquamarine/PKGBUILD",
-            "pkgbuildSha256": "1bd4197238a4f0092216ab2dfd723126d618cceb977d45865e140a488a8f56ff",
+            "pkgbuildSha256": "90c998ea89b5c806919c102df78ef3f0d7816a9a08c26eac26b4adf44ba59a2a",
             "packagingRepository": "https://gitlab.archlinux.org/archlinux/packaging/packages/aquamarine.git",
             "packagingCommit": "8489a8358817a964a923f05ba324996378d81a5d",
             "license": "BSD-3-Clause",
-            "binarySha256": "7da003aa60e008e9f514c312f01c1e967983e2c46732d58953735bfaee3fd8aa",
+            "binarySha256": "1fb6a90079a1f5620f9441d3e8a92426d21c6bbbab2f1ac070651425dae4129d",
         }
         and pkgbuild.is_file()
         and hashlib.sha256(pkgbuild.read_bytes()).hexdigest() == aquamarine["pkgbuildSha256"]
         and f"sha256sums=('{aquamarine['sha256']}')" in pkgbuild_text
-        and "pkgver=0.14.0" in pkgbuild_text
-        and "pkgrel=2" in pkgbuild_text,
-        "factory rebuilds aquamarine 0.14 from the reviewed Arch PKGBUILD and upstream tarball",
+        and "pkgver=0.15.1" in pkgbuild_text
+        and "pkgrel=1" in pkgbuild_text,
+        "factory rebuilds aquamarine 0.15.1 from the reviewed Arch PKGBUILD and upstream tarball",
     )
     hyprtoolkit = spec.get("supplyChain", {}).get("hyprtoolkit", {})
     toolkit_recipe = GUEST / hyprtoolkit.get("pkgbuild", "")
     check(
         hyprtoolkit == {
     "version": "0.5.4",
-    "pkgrel": "6.1",
+    "pkgrel": "6.2",
     "repository": "https://github.com/hyprwm/hyprtoolkit",
     "url": "https://github.com/hyprwm/hyprtoolkit/archive/v0.5.4/hyprtoolkit-0.5.4.tar.gz",
     "sha256": "2fb59789f231c1c4e9154ceffc1e7524c0cae154807c0d57e6166806255b570f",
     "pkgbuild": "pinned-packages/hyprtoolkit/PKGBUILD",
-    "pkgbuildSha256": "803f1db19ad1d42e48b638e35256d3dabbe19d1d0b4b3fd584eedf20121256ce",
+    "pkgbuildSha256": "28c3dabce8c9553cfe283d23f568551d48efa7d51d14658cc8522d5473dd73a6",
     "packagingRepository": "https://gitlab.archlinux.org/archlinux/packaging/packages/hyprtoolkit.git",
     "packagingCommit": "1ed230388a2ccb2c857af980235cf25a4f86e39e",
     "license": "BSD-3-Clause",
-    "binarySha256": "dc814fad9723bfcf66dbd29b7f8c5cc96fd63a1ff623909e466dd9d011c0cba8"
+    "binarySha256": "d901177e32b02d6769f5bcf118e43b22061a5a21a3aa77ee72469d4a2db85895"
 }
         and toolkit_recipe.is_file()
         and hashlib.sha256(toolkit_recipe.read_bytes()).hexdigest() == hyprtoolkit["pkgbuildSha256"],
@@ -601,14 +610,14 @@ def main() -> None:
     check(
         hyprland
         == {
-            "version": "0.56.1",
+            "version": "0.56.2",
             "pkgrel": "3.2",
-            "upstreamPackageVersion": "0.56.1-3",
+            "upstreamPackageVersion": "0.56.2-3",
             "repository": "https://github.com/hyprwm/Hyprland",
-            "commit": "5c9377c15f85c50648f35ca5a213754f95b93ca0",
-            "url": "https://github.com/hyprwm/Hyprland/releases/download/v0.56.1/source-v0.56.1.tar.gz",
-            "sha256": "c5b26eb377360358d01839a1de43fdc004a33e56d6a5d442fdad69b9f3a10549",
-            "upstreamPackageSha256": "4fcb1b5efe019e184a85b234f75151e68fd8f60ace9b06ff59e7ffbd8a280f7a",
+            "commit": "efb50993780079460b0cbed1363e2166a2de1d9f",
+            "url": "https://github.com/hyprwm/Hyprland/releases/download/v0.56.2/source-v0.56.2.tar.gz",
+            "sha256": "03ad3f5ef152ff44116ffd56fcf808486211ecabf4f0ba567108ee746ba5cd2e",
+            "upstreamPackageSha256": "dba57b0cba04557b7fa3478253c93fe4c8e88737f8dd570c0820177f567e5a95",
             "patch": "patches/hyprland/rounded-border-coverage.patch",
             "patchSha256": "5da431cbca37bdd9a66edeb77c3d677b7033d5f91449158e3ffa58a4eb515828",
             "glazeVersion": "7.2.0",
@@ -616,7 +625,7 @@ def main() -> None:
             "glazeUrl": "https://github.com/stephenberry/glaze/archive/refs/tags/v7.2.0.tar.gz",
             "glazeSha256": "17dba19ae63ae48f94994f00d49d5cb3c8f1306db1046c534c4828662490b7d4",
             "glazeLicenseSha256": "5d49e66411a0807a7c8d6b911b9a26b59e940c71aebe561a3ad8b0b80ac4b7b6",
-            "binarySha256": "b0c96f3057f9f4000c5e50adba0f6020dd7f63747e64371adcd4b30b97eabdb9",
+            "binarySha256": "34499692a552c4f36bce98b0efda02ebca00d2297c830b109b24ad6a64669645",
             "license": "BSD-3-Clause",
             "issue": "https://github.com/omacom/try-omarchy/issues/5",
             "buildPackages": {
@@ -626,7 +635,7 @@ def main() -> None:
                 "gcc": "16.1.1+r12+g301eb08fa2c5-1",
                 "gcc-libs": "16.1.1+r12+g301eb08fa2c5-1",
                 "glibc": "2.43+r22+g8362e8ce10b2-2",
-                "hyprland": "0.56.1-3",
+                "hyprland": "0.56.2-3",
                 "hyprland-protocols": "0.7.0-1",
                 "make": "4.4.1-3",
                 "meson": "1.12.0-1",
