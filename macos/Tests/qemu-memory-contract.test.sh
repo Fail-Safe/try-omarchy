@@ -65,6 +65,12 @@ chmod 644 "$resources/scripts/qemu-port-forwarding.sh"
 cat >"$contents/MacOS/omarchy-vm-helper" <<'SH'
 #!/bin/bash
 set -euo pipefail
+if [[ ${1:-} == --wait-for-qmp ]]; then
+  if [[ -n ${REAL_QMP_HELPER:-} ]]; then
+    exec "$REAL_QMP_HELPER" "$@"
+  fi
+  exit "${FAKE_QMP_READY_STATUS:-0}"
+fi
 if [[ ${1:-} == --host-keyboard-geometry ]]; then
   if [[ -n ${FAKE_HOST_KEYBOARD_FAIL:-} ]]; then
     printf 'cannot detect host keyboard geometry\n' >&2
@@ -123,10 +129,12 @@ case " $* " in
     ;;
   *)
     exec /usr/bin/python3 - "$@" <<'PY'
+import json
 import os
 from pathlib import Path
 import socket
 import sys
+import threading
 import time
 
 arguments = sys.argv[1:]
@@ -134,6 +142,11 @@ geometry = os.environ.get("TRYOMARCHY_KEYBOARD", "")
 Path(os.environ["FAKE_QEMU_LOG"]).write_text(
     "\n".join(arguments) + f"\nTRYOMARCHY_KEYBOARD={geometry}\n"
 )
+qmp_paths = {
+    arguments[index + 1][5:].split(",", 1)[0]
+    for index, argument in enumerate(arguments[:-1])
+    if argument == "-qmp" and arguments[index + 1].startswith("unix:")
+}
 socket_paths = []
 for argument in arguments:
     if argument.startswith("unix:"):
@@ -154,6 +167,26 @@ if os.environ.get("FAKE_QEMU_SKIP_SOCKETS") != "1":
         server.bind(path)
         server.listen(1)
         servers.append(server)
+        # Like QEMU, answer the QMP monitor with a greeting; the launcher
+        # waits for that before declaring the VM ready.
+        if path in qmp_paths:
+            def greet(server=server):
+                while True:
+                    try:
+                        client, _ = server.accept()
+                    except OSError:
+                        return
+                    try:
+                        client.settimeout(1)
+                        client.sendall(b'{"QMP": {"version": {}, "capabilities": []}}\r\n')
+                        with client.makefile("rb") as stream:
+                            request = json.loads(stream.readline())
+                        assert request["execute"] == "qmp_capabilities"
+                        client.sendall(json.dumps({"return": {}, "id": request["id"]}).encode() + b"\r\n")
+                    except (OSError, ValueError):
+                        pass
+                    client.close()
+            threading.Thread(target=greet, daemon=True).start()
 
 time.sleep(float(os.environ.get("FAKE_QEMU_LIFETIME", "0.20")))
 for server in servers:

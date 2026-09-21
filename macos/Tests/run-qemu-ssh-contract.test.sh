@@ -77,6 +77,16 @@ chmod 644 "$resources/scripts/qemu-port-forwarding.sh"
 cat >"$contents/MacOS/omarchy-vm-helper" <<'SH'
 #!/bin/bash
 set -euo pipefail
+if [[ ${1:-} == --wait-for-qmp ]]; then
+  if [[ -n ${FAKE_QMP_READY_WAIT:-} ]]; then
+    printf '%s %s %s\n' "$$" "$PPID" "$2" >"$FAKE_QMP_READY_WAIT"
+    while true; do sleep 0.1; done
+  fi
+  if [[ -n ${REAL_QMP_HELPER:-} ]]; then
+    exec "$REAL_QMP_HELPER" "$@"
+  fi
+  exit "${FAKE_QMP_READY_STATUS:-0}"
+fi
 if [[ ${1:-} == --host-keyboard-geometry ]]; then
   if [[ -n ${FAKE_HOST_KEYBOARD_FAIL:-} ]]; then
     printf 'cannot detect host keyboard geometry\n' >&2
@@ -143,11 +153,13 @@ case " $* " in
     ;;
   *)
     exec /usr/bin/python3 - "$@" <<'PY'
+import json
 import os
 from pathlib import Path
 import signal
 import socket
 import sys
+import threading
 import time
 
 arguments = sys.argv[1:]
@@ -175,6 +187,11 @@ if is_recovery:
         'console=tty0 console=hvc0 loglevel=3"}}\n'
     )
     export_path.joinpath("complete").write_text("try-omarchy-boot-export-v1\n")
+qmp_paths = {
+    arguments[index + 1][5:].split(",", 1)[0]
+    for index, argument in enumerate(arguments[:-1])
+    if argument == "-qmp" and arguments[index + 1].startswith("unix:")
+}
 socket_paths = []
 for argument in arguments:
     if argument.startswith("unix:"):
@@ -185,6 +202,7 @@ for argument in arguments:
                 socket_paths.append(field[5:])
 
 servers = []
+qmp_ready = threading.Event()
 if os.environ.get("FAKE_QEMU_SKIP_SOCKETS") != "1":
     for path in socket_paths:
         try:
@@ -195,6 +213,30 @@ if os.environ.get("FAKE_QEMU_SKIP_SOCKETS") != "1":
         server.bind(path)
         server.listen(1)
         servers.append(server)
+        # Like QEMU, answer the QMP monitor with a greeting; the launcher
+        # waits for that before declaring the VM ready.
+        if path in qmp_paths:
+            def greet(server=server):
+                while True:
+                    try:
+                        client, _ = server.accept()
+                    except OSError:
+                        return
+                    try:
+                        client.settimeout(1)
+                        client.sendall(b'{"QMP": {"version": {}, "capabilities": []}}\r\n')
+                        with client.makefile("rb") as stream:
+                            request = json.loads(stream.readline())
+                        assert request["execute"] == "qmp_capabilities"
+                        client.sendall(json.dumps({"return": {}, "id": request["id"]}).encode() + b"\r\n")
+                        qmp_ready.set()
+                    except (OSError, ValueError):
+                        pass
+                    client.close()
+            threading.Thread(target=greet, daemon=True).start()
+
+if os.environ.get("FAKE_QEMU_WAIT_FOR_QMP") == "1" and not qmp_ready.wait(10):
+    raise SystemExit("fake QEMU timed out waiting for the readiness handshake")
 
 if os.environ.get("FAKE_QEMU_WAIT_FOR_TERMINATION") == "1":
     # Failure scenarios need QEMU alive until launcher cleanup, regardless of
@@ -537,6 +579,46 @@ assert_contains "$(<"$test_root/disabled/storage.log")" select-existing
 assert_contains "$(<"$test_root/disabled/storage.log")" create
 assert_line_pair "$test_root/disabled/qemu.log" -smp '8,sockets=1,cores=8,threads=1'
 assert_line_pair "$test_root/disabled/qemu.log" -m 8192M
+
+# Release launches must work without a usable host interpreter. The fake
+# QEMU uses an absolute interpreter path only as test infrastructure.
+cat >"$shim_dir/python3" <<'SH'
+#!/bin/bash
+printf 'unexpected runtime Python invocation\n' >>"$NO_PYTHON_LOG"
+exit 127
+SH
+chmod 755 "$shim_dir/python3"
+real_helper="$macos_dir/.build/debug/omarchy-vm-helper"
+[[ -x $real_helper ]] || fail 'build the native helper with swift build before running this test'
+run_scenario no-python 0 '' "REAL_QMP_HELPER=$real_helper" \
+  "NO_PYTHON_LOG=$test_root/python.log" FAKE_QEMU_WAIT_FOR_QMP=1
+[[ ! -e $test_root/python.log ]] || fail 'release launcher invoked Python'
+assert_contains "$(<"$test_root/no-python/stderr")" '[qemu-gpu] Ready. QMP:'
+/bin/rm -f "$shim_dir/python3"
+
+run_scenario monitor-failure 1 '' FAKE_QMP_READY_STATUS=1 FAKE_QEMU_LIFETIME=10
+assert_contains "$(<"$test_root/monitor-failure/stderr")" "QEMU's QMP monitor did not become ready"
+assert_not_contains "$(<"$test_root/monitor-failure/stderr")" '[qemu-gpu] Ready. QMP:'
+
+# Cancelling a launch while the monitor is initializing must reap both the
+# readiness helper and QEMU rather than wait for the 60-second deadline.
+run_scenario monitor-cancel 143 '' FAKE_QEMU_LIFETIME=10 \
+  "FAKE_QMP_READY_WAIT=$test_root/readiness-pids" &
+cancel_scenario_pid=$!
+for ((attempt=0; attempt<100; attempt++)); do
+  [[ -s $test_root/readiness-pids ]] && break
+  sleep 0.05
+done
+[[ -s $test_root/readiness-pids ]] || fail 'readiness helper did not start for cancellation test'
+read -r readiness_pid launcher_pid target_pid <"$test_root/readiness-pids"
+kill -TERM "$launcher_pid"
+wait "$cancel_scenario_pid" || fail 'cancelling monitor readiness did not stop the launcher'
+for stopped_pid in "$readiness_pid" "$target_pid"; do
+  if kill -0 "$stopped_pid" 2>/dev/null; then
+    fail "cancelling readiness left child $stopped_pid running"
+  fi
+done
+assert_not_contains "$(<"$test_root/monitor-cancel/stderr")" '[qemu-gpu] Ready. QMP:'
 
 run_scenario shutdown-race 0 '' FAKE_SHUTDOWN_RACE=1
 [[ -e $test_root/shutdown-race/qemu.log.raced ]] || fail 'shutdown race was not exercised'

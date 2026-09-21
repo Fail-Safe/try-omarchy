@@ -1115,6 +1115,7 @@ work_dir=""
 owner_marker=""
 owner_token=""
 qemu_pid=""
+monitor_ready_pid=""
 audio_bridge_pid=""
 authentication_bridge_pid=""
 camera_bridge_pid=""
@@ -1145,6 +1146,9 @@ cleanup() {
   local status=$?
   trap - EXIT HUP INT TERM
   set +e
+  if [[ $monitor_ready_pid =~ ^[0-9]+$ ]]; then
+    terminate_child "$monitor_ready_pid" 20
+  fi
   if [[ $network_link_bridge_pid =~ ^[0-9]+$ ]]; then
     terminate_child "$network_link_bridge_pid" 20
   fi
@@ -1736,6 +1740,17 @@ done
 [[ -S $authentication_bridge_socket ]] || fail "QEMU did not create its private authentication bridge socket"
 [[ -S $camera_bridge_socket ]] || fail "QEMU did not create its private camera bridge socket"
 [[ -S $clipboard_bridge_socket ]] || fail "QEMU did not create its private clipboard bridge socket"
+# The socket file appears before QEMU's main loop accepts connections, and the
+# helper tears the VM down if the monitor behind this line does not answer.
+# Use the bundled helper so release launches do not depend on host Python.
+# Wait on a child so Bash can service cancellation signals during slow init.
+"$native_bridge" --wait-for-qmp "$qemu_pid" "$qmp_socket" 9>&- &
+monitor_ready_pid=$!
+if ! wait "$monitor_ready_pid"; then
+  monitor_ready_pid=""
+  fail "QEMU's QMP monitor did not become ready"
+fi
+monitor_ready_pid=""
 echo "[qemu-gpu] Ready. QMP: $qmp_socket" >&2
 
 # FD 9 deliberately remains open only in QEMU. Letting the sibling audio
