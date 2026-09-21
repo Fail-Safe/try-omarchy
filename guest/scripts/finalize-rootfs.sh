@@ -38,6 +38,7 @@ done
 systemctl enable NetworkManager.service
 systemctl enable systemd-resolved.service
 systemctl enable systemd-timesyncd.service
+systemctl enable try-omarchy-clock-recovery.timer
 
 # Avoid a systemctl introspection path that crashes under some ARM container
 # runtimes after it has already written the link.
