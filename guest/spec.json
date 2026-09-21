@@ -382,6 +382,20 @@
         ]
       },
       {
+        "id": "update-restart-arm-kernel",
+        "description": "Recognize package-owned ARM kernel module metadata and explicitly distinguish matching, changed, and unknown kernel reboot states.",
+        "reference": "https://github.com/basecamp/omarchy/blob/346e69e1cec6c4e8924531874af6ba010a1bc99e/bin/omarchy-update-restart",
+        "patch": "patches/omarchy/update-restart-arm-kernel.patch",
+        "patchSha256": "307efd205ff1e7ab83c10043be81ee2024ae30df006ed93c4fd33d3ac8660a20",
+        "targets": [
+          {
+            "path": "bin/omarchy-update-restart",
+            "beforeSha256": "7bc95f8a0a3ae35cfd81453e08194f5660c27cf59528c7d95b4345f362030b60",
+            "afterSha256": "c791af27312db4cf4f11ec4d112a3e4f50654d82143368166bf385c25f92f5d9"
+          }
+        ]
+      },
+      {
         "id": "pkg-add-aarch64-unavailable",
         "description": "Refuse known aarch64-unavailable packages from omarchy-pkg-add with the shared message.",
         "reference": "https://github.com/basecamp/omarchy/blob/346e69e1cec6c4e8924531874af6ba010a1bc99e/bin/omarchy-pkg-add",
