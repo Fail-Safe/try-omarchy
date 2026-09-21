@@ -40,10 +40,9 @@ On macOS 26 or newer, before the real VM starts, the launcher asks the bundled
 QEMU to create a tiny disposable HVF machine with ARM virtualization extensions
 and Apple's platform GICv3. When that probe succeeds on M3 and newer Apple
 Silicon, the real guest starts at EL2 and Linux exposes `/dev/kvm`; on older
-chips the launcher keeps the existing platform-GIC/EL1 configuration. macOS 15
-skips the probe and always uses EL1: its paused probe can succeed even though
-QEMU later aborts with `HV_BAD_ARGUMENT` when synchronizing vCPU registers.
-An unavailable or unrecognized host version also keeps the EL1 configuration.
+chips the launcher keeps the existing platform-GIC/EL1 configuration. The
+launcher rejects hosts older than macOS 26, as required by the pinned GPU
+runtime, before probing or starting QEMU.
 The pinned QEMU 11.1.1 runtime contains the upstream HVF vGIC and
 nested-virtualization implementation.
 
