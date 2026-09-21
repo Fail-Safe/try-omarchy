@@ -121,6 +121,7 @@ case " $* " in
     exec /usr/bin/python3 - "$@" <<'PY'
 import os
 from pathlib import Path
+import signal
 import socket
 import sys
 import time
@@ -168,7 +169,18 @@ if os.environ.get("FAKE_QEMU_SKIP_SOCKETS") != "1":
         server.listen(1)
         servers.append(server)
 
-time.sleep(float(os.environ.get("FAKE_QEMU_LIFETIME", "0.20")))
+if os.environ.get("FAKE_QEMU_WAIT_FOR_TERMINATION") == "1":
+    # Failure scenarios need QEMU alive until launcher cleanup, regardless of
+    # host speed. The alarm only bounds a broken launcher/test, not success.
+    def timed_out(signum, frame):
+        Path(os.environ[log_variable] + ".timed-out").touch()
+        raise SystemExit("fake QEMU timed out waiting for launcher cleanup")
+
+    signal.signal(signal.SIGALRM, timed_out)
+    signal.alarm(60)
+    signal.pause()
+else:
+    time.sleep(float(os.environ.get("FAKE_QEMU_LIFETIME", "0.20")))
 for server in servers:
     server.close()
 raise SystemExit(int(os.environ.get("FAKE_QEMU_STATUS", "0")))
@@ -314,6 +326,9 @@ SH
 cat >"$shim_dir/ps" <<'SH'
 #!/bin/bash
 [[ ${FAKE_PROCESS_INSPECTION_UNAVAILABLE:-0} != 1 ]] || exit 77
+if [[ ${FAKE_PS_DELAY:-0} != 0 && $* == *' -o state=' ]]; then
+  sleep "$FAKE_PS_DELAY"
+fi
 if [[ ${FAKE_LARGE_PROCESS_LIST:-0} == 1 && "$*" == "-axo pid=,command=" ]]; then
   printf '999999 /bin/bash run-qemu-gpu.sh\n'
   /usr/bin/awk 'BEGIN { for (i=0; i<10000; i++) print 800000+i, "unrelated process with enough output to fill a pipe buffer" }'
@@ -464,6 +479,7 @@ run_scenario() {
   else
     actual_status=$?
   fi
+  [[ ! -e $scenario_dir/qemu.log.timed-out ]] || fail "$scenario timed out waiting for launcher cleanup"
   if [[ $actual_status != "$expected_status" ]]; then
     /bin/cat "$scenario_dir/stderr" >&2 || true
     fail "$scenario expected status $expected_status, got $actual_status"
@@ -496,7 +512,9 @@ assert_line_pair "$test_root/disabled/qemu.log" -m 8192M
 
 run_scenario shutdown-race 0 '' FAKE_SHUTDOWN_RACE=1
 [[ -e $test_root/shutdown-race/qemu.log.raced ]] || fail 'shutdown race was not exercised'
-run_scenario audio-exits-early 1 '' FAKE_AUDIO_EXIT_EARLY=1 FAKE_QEMU_LIFETIME=2
+# Slow process checks deliberately exceed the old two-second QEMU lifetime.
+run_scenario audio-exits-early 1 '' \
+  FAKE_AUDIO_EXIT_EARLY=1 FAKE_QEMU_WAIT_FOR_TERMINATION=1 FAKE_PS_DELAY=0.1
 assert_contains "$(<"$test_root/audio-exits-early/stderr")" 'native audio bridge exited while QEMU was running'
 
 # Exercise resource values through the real launcher and its QEMU boundary.
@@ -581,7 +599,7 @@ run_scenario nested-version-failure 1 '' FAKE_MACOS_VERSION_STATUS=1
 
 run_scenario audio-shutdown-race 0 '' FAKE_AUDIO_EARLY_EXIT=1 FAKE_QEMU_LIFETIME=0.5
 assert_not_contains "$(<"$test_root/audio-shutdown-race/stderr")" 'native audio bridge exited'
-run_scenario audio-failure 1 '' FAKE_AUDIO_EARLY_EXIT=1 FAKE_QEMU_LIFETIME=10
+run_scenario audio-failure 1 '' FAKE_AUDIO_EARLY_EXIT=1 FAKE_QEMU_WAIT_FOR_TERMINATION=1
 assert_contains "$(<"$test_root/audio-failure/stderr")" 'native audio bridge exited while QEMU was running'
 
 run_scenario non-immersive 0 '' OMARCHY_QEMU_GPU_IMMERSIVE=0
