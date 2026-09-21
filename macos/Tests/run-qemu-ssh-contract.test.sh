@@ -650,6 +650,19 @@ non_immersive_qemu=$(<"$test_root/non-immersive/qemu.log")
 assert_contains "$non_immersive_qemu" \
   'cocoa,gl=es,show-cursor=on,zoom-to-fit=on,full-screen=off,full-grab=on,immersive=off,swap-opt-cmd=off'
 
+# An app update must not advertise its own locale capability for an older
+# selected disk. Check both the rejection and a supported saved boot kit.
+run_scenario locale-unsupported 1 '' OMARCHY_QEMU_GPU_LOCALE=zh_TW.UTF-8
+assert_contains "$(<"$test_root/locale-unsupported/stderr")" 'does not support language selection'
+[[ ! -f $test_root/locale-unsupported/qemu.log ]] || fail 'unsupported locale started QEMU'
+saved_command_line=$(<"$persistent_root/boot/command-line")
+printf '%s tryomarchy.locale_support=1\n' "$saved_command_line" >"$persistent_root/boot/command-line"
+run_scenario locale-supported 0 '' OMARCHY_QEMU_GPU_LOCALE=zh_TW.UTF-8
+assert_contains "$(<"$test_root/locale-supported/qemu.log")" 'tryomarchy.locale=zh_TW.UTF-8'
+run_scenario locale-english 0 '' OMARCHY_QEMU_GPU_LOCALE=
+assert_not_contains "$(<"$test_root/locale-english/qemu.log")" 'tryomarchy.locale='
+printf '%s\n' "$saved_command_line" >"$persistent_root/boot/command-line"
+
 # Simulate installing a newer app build after the first VM was created. The
 # saved VM must be selected before the launcher even considers the absent new
 # factory image, and it must boot with the kernel, initramfs, and base command
@@ -658,8 +671,10 @@ assert_contains "$non_immersive_qemu" \
 printf 'new-kernel\n' >"$guest/vmlinuz-linux"
 printf 'new-initramfs\n' >"$guest/initramfs-linux.img"
 /usr/bin/plutil -replace kernelCommandLine -string \
-  'root=/dev/vda rw rootwait console=tty0 console=hvc0 loglevel=5 systemd.show_status=false rd.systemd.show_status=false mitigations=off nowatchdog' \
+  'root=/dev/vda rw rootwait console=tty0 console=hvc0 loglevel=5 systemd.show_status=false rd.systemd.show_status=false mitigations=off nowatchdog tryomarchy.locale_support=1' \
   "$guest/launch.plist"
+run_scenario locale-older-disk-new-app 1 '' OMARCHY_QEMU_GPU_LOCALE=zh_TW.UTF-8
+assert_contains "$(<"$test_root/locale-older-disk-new-app/stderr")" 'does not support language selection'
 printf 'previous boot console\n' >"$persistent_root/console.log"
 run_scenario enabled 0 '' OMARCHY_QEMU_GPU_PORT_FORWARDS=tcp:2223:22
 [[ -f $persistent_root/console.log.1 ]] || \

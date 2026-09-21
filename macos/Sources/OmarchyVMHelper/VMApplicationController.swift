@@ -57,6 +57,7 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
     private let fullscreenPreferenceStore: FullscreenPreferenceStore
     private let resourcePreferenceStore: VMResourcePreferenceStore
     private let resourceLimits: VMResourceLimits
+    private let languagePreferenceStore: LanguagePreferenceStore
     private let storageLocationStore: StorageLocationPreferenceStore
     private let volumeProbe: VolumeProbing
     private let volumeRootDetector: VolumeRootDetecting
@@ -98,6 +99,7 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
         fullscreenPreferenceStore: FullscreenPreferenceStore = FullscreenPreferenceStore(),
         resourcePreferenceStore: VMResourcePreferenceStore = VMResourcePreferenceStore(),
         resourceLimits: VMResourceLimits = .current,
+        languagePreferenceStore: LanguagePreferenceStore = LanguagePreferenceStore(),
         storageLocationStore: StorageLocationPreferenceStore = StorageLocationPreferenceStore(),
         volumeProbe: VolumeProbing = URLVolumeProbe(),
         volumeRootDetector: VolumeRootDetecting = FileManagerVolumeRootDetector(),
@@ -115,6 +117,7 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
         self.fullscreenPreferenceStore = fullscreenPreferenceStore
         self.resourcePreferenceStore = resourcePreferenceStore
         self.resourceLimits = resourceLimits
+        self.languagePreferenceStore = languagePreferenceStore
         self.storageLocationStore = storageLocationStore
         self.volumeProbe = volumeProbe
         self.volumeRootDetector = volumeRootDetector
@@ -225,6 +228,16 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
                 self?.fullscreenPreferenceStore.save(
                     FullscreenPreferences(isImmersive: isImmersive)
                 )
+            },
+            languageStatus: { [weak self] in
+                LanguageMenuState.make(
+                    preference: self?.languagePreferenceStore.load() ?? .systemDefault,
+                    supportsSelection: self?.supportsLanguageSelection() ?? false
+                )
+            },
+            setLanguage: { [weak self] localeToken in
+                guard self?.supportsLanguageSelection() == true else { return }
+                self?.languagePreferenceStore.save(LanguagePreference(localeToken: localeToken))
             },
             integrationCacheURL: { [weak self] in
                 guard let self else { return nil }
@@ -456,8 +469,13 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
             preferences: resourcePreferenceStore.load(),
             limits: resourceLimits
         )
-        let storage = StorageLocationLaunchConfiguration.make(
+        let language = LanguageLaunchConfiguration.make(
             baseEnvironment: resources.environment,
+            preference: languagePreferenceStore.load(),
+            supportsSelection: supportsLanguageSelection()
+        )
+        let storage = StorageLocationLaunchConfiguration.make(
+            baseEnvironment: language.environment,
             preference: storageLocationStore.load(),
             metrics: bundledMetrics,
             probe: volumeProbe,
@@ -577,6 +595,17 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
         } catch {
             return error.localizedDescription
         }
+    }
+
+    private func supportsLanguageSelection() -> Bool {
+        if initialArguments.first == QEMUGPUStorageOption.ephemeral.rawValue {
+            return bundledMetrics?.supportsLanguageSelection ?? false
+        }
+        return QEMUGPUStorageSpaceEstimate.supportsLanguageSelection(
+            environment: baseEnvironment,
+            metrics: bundledMetrics,
+            preference: storageLocationStore.load()
+        )
     }
 
     private func storageLocationMenuState() -> StorageLocationMenuState {

@@ -371,6 +371,24 @@ at least 4 GiB for macOS for allocations above the 4 GiB baseline. They also
 accept values between menu steps, down to the guest's 2048 MiB minimum. The
 4 GiB baseline remains available on smaller hosts such as CI runners.
 
+## Traditional Chinese
+
+Choose **Switch to Traditional Chinese (繁體中文)** next to **Language** on
+the start menu to boot Omarchy in Traditional Chinese (`zh_TW.UTF-8`);
+**Use English (Default)** switches back. The change takes effect on the next
+launch.
+
+Older saved VMs do not gain language support when the Mac app updates. Their
+Language row stays disabled until **Reset Omarchy** creates a new factory VM.
+Reset erases the VM's data; back up anything you need first. The setting remains
+available for supported saved VMs across later app updates.
+
+The desktop, file manager, browser, and system dialogs are translated, and
+fcitx5 adds Chewing (Bopomofo) input, reachable with `Ctrl + Space`; the US
+keyboard layout remains the default input method. Omarchy's own setup wizard
+and menus stay in English either way: upstream Omarchy has no translation
+mechanism, and those strings are hardcoded in its shell scripts.
+
 ## Requirements
 
 - Apple Silicon Mac (`arm64`)

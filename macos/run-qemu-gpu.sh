@@ -1094,6 +1094,23 @@ if [[ -n $shared_folder ]]; then
   shared_folder_kernel_argument=" omarchy.shared_folder_name=$shared_folder_name_encoded"
 fi
 
+# The launcher publishes an optional guest language opt-in. The Swift app
+# validates the choice against its own locale allowlist first; re-check here
+# so a stray environment value can never select a locale the guest image
+# never generated. Empty means the guest's own default (English).
+guest_locale=${OMARCHY_QEMU_GPU_LOCALE:-}
+locale_kernel_argument=""
+if [[ -n $guest_locale ]]; then
+  case $guest_locale in
+    zh_TW.UTF-8)
+      locale_kernel_argument=" tryomarchy.locale=$guest_locale"
+      ;;
+    *)
+      fail "unsupported guest locale: $guest_locale"
+      ;;
+  esac
+fi
+
 work_dir=""
 owner_marker=""
 owner_token=""
@@ -1514,6 +1531,13 @@ if ((reset_only)); then
   exit 0
 fi
 
+if [[ -n $guest_locale ]]; then
+  case " $launch_kernel_command_line " in
+    *' tryomarchy.locale_support=1 '*) ;;
+    *) fail 'This saved VM does not support language selection. Use English to keep using it, or Reset Omarchy to use the new factory (reset erases VM data).' ;;
+  esac
+fi
+
 case ${OMARCHY_QEMU_GPU_IMMERSIVE:-1} in
   1)
     cocoa_full_screen=on
@@ -1599,7 +1623,7 @@ qemu_args=(
   -qmp "unix:$qmp_socket,server=on,wait=off"
   -kernel "$launch_kernel"
   -initrd "$launch_initramfs"
-  -append "$launch_kernel_command_line omarchy.qemu_virgl=1 omarchy.virgl_dual_source=1$shared_folder_kernel_argument$ssh_kernel_argument$keyboard_kernel_argument"
+  -append "$launch_kernel_command_line omarchy.qemu_virgl=1 omarchy.virgl_dual_source=1$shared_folder_kernel_argument$ssh_kernel_argument$keyboard_kernel_argument$locale_kernel_argument"
   -drive "if=none,id=omarchy-root,file=$working_disk,format=raw,media=disk,cache=writeback"
   -device 'virtio-blk-pci,drive=omarchy-root,serial=omarchy-root'
   -device "$gpu_device"
