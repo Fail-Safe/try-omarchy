@@ -1,37 +1,23 @@
 ---
 name: Bug report
-about: Report a reproducible problem with Try Omarchy
+about: Report a problem with Try Omarchy
 title: ''
 labels: ''
 assignees: ''
 ---
 
 <!-- For suspected vulnerabilities, follow SECURITY.md instead of posting
-     publicly. Remove secrets and unrelated personal information from evidence. -->
+     publicly. Remove secrets and unrelated personal information from attachments. -->
 
-## Problem
+<!-- Before opening a new report, search open and closed issues for the same
+     problem. Add useful details to an existing report, or link related issues. -->
 
-## Environment
+## What's wrong?
 
-- Try Omarchy version or commit:
-- macOS version and Apple chip:
-- Bundled release or local build:
-- Omarchy version and runtime details, if relevant (write unknown if unavailable):
+<!-- What happened, and what did you expect? Does it happen in the Mac app or
+     inside Omarchy? Include steps to reproduce if you know them.
+     Logs, screenshots, or a short recording are optional. -->
 
-## Steps to reproduce
+## System details
 
-1.
-2.
-3.
-
-## Expected and actual behavior
-
-## Evidence
-
-<!-- Include relevant logs, errors, and screenshots. For motion or interaction
-     problems, a short recording helps. Note frequency and any workaround. -->
-
-## Checklist
-
-- [ ] I searched open and closed issues and linked any related reports.
-- [ ] I included reproduction steps and environment details, and identified anything I could not verify.
+<!-- App version, macOS version, and Apple chip, if known. -->
