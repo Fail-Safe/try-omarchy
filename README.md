@@ -775,6 +775,6 @@ Try Omarchy is pre-1.0 and under active development. Omarchy and bundled depende
 
 Report ordinary bugs through [GitHub Issues](https://github.com/omacom/try-omarchy/issues). Report suspected vulnerabilities using the private process in [`SECURITY.md`](SECURITY.md), not a public issue.
 
-Try Omarchy's original code is licensed under the [MIT License](LICENSE).
+## License
 
-by [@martiano](https://x.com/martiano)
+[MIT](LICENSE) - Created by [Eduardo Martinez](https://x.com/martiano)
