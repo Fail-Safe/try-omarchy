@@ -6,10 +6,19 @@ software rendering. Updating the Mac app does not replace files in an existing
 VM, so retiring that wrapper is a one-time, opt-in step. No factory reset or
 package removal is needed.
 
-The migration helper only runs when the current boot advertises
+When Alacritty is installed, the migration helper only runs when the current
+boot advertises
 `omarchy.virgl_dual_source=1`, which the launcher supplies with the fixed VirGL
 runtime. This marker identifies that specific fix; it is not a claim that every
 OpenGL application is compatible. Kitty's separate workaround is unaffected.
+
+If `/usr/bin/alacritty` is missing or not executable, the helper can retire the
+unused wrapper without that marker. An uninstalled Alacritty can leave an
+iconless entry in Apps: the wrapper still satisfies `TryExec=alacritty`, and
+Quickshell can keep displaying the user desktop entry even after the wrapper is
+removed. Use the separate user-mode cleanup below to retire that stale entry.
+To use Alacritty again, install it through **Install → Terminal → Alacritty**;
+the package supplies both the executable and its logo.
 
 ## Copy the helper from the installed app
 
@@ -22,8 +31,9 @@ APP="/Applications/Try Omarchy.app"
 cp -n "$APP/Contents/Resources/scripts/try-omarchy-migrate-alacritty" "$HOME/Downloads/"
 ```
 
-Restart the VM using the updated app so it receives the runtime marker. Inside
-Omarchy, run the copied helper from the shared folder:
+For installed Alacritty, restart the VM using the updated app so it receives
+the runtime marker. Cleanup of an uninstalled Alacritty does not need a restart.
+Inside Omarchy, run the copied helper from the shared folder:
 
 ```sh
 sudo /usr/bin/python3 -I /mnt/mac/try-omarchy-migrate-alacritty
@@ -32,6 +42,21 @@ sudo /usr/bin/python3 -I /mnt/mac/try-omarchy-migrate-alacritty
 Alternatively, copy the same bundled file into the guest using an existing SSH
 connection and run it with `sudo /usr/bin/python3 -I /path/to/try-omarchy-migrate-alacritty`.
 SSH access and sharing are not enabled automatically by this migration.
+
+## Remove a stale Apps entry for an uninstalled Alacritty
+
+After retiring the unused wrapper, run the same copied helper **without sudo**:
+
+```sh
+/usr/bin/python3 -I /mnt/mac/try-omarchy-migrate-alacritty --launcher
+```
+
+This step runs as the desktop user. It only removes the exact upstream
+`Alacritty.desktop` when no `alacritty` executable is found in `PATH`, backing
+it up beside the original as `.Alacritty.desktop.try-omarchy-backup`. Apps
+refreshes automatically. It honors `XDG_DATA_HOME` (default `~/.local/share`),
+preserves customized entries and existing backups, and refuses to run as root.
+The wrapper migration alone does not remove this user-owned launcher entry.
 
 ## What the helper changes
 
@@ -50,8 +75,9 @@ Close and reopen Alacritty afterward. Existing terminal processes keep the
 environment they started with. This helper does not change terminal selection,
 Alacritty configuration, or the packaged `/usr/bin/alacritty` executable.
 
-The new factory image also includes a marker-gated service that invokes the
-helper before the graphical login manager. That service is **not automatically
+The new factory image also includes a service that invokes the helper before
+the graphical login manager. The helper checks the runtime marker itself when
+Alacritty is installed. That service is **not automatically
 installed into older guests**; the one-time copied helper is the existing-guest
 migration path.
 
