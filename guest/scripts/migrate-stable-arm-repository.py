@@ -4,6 +4,7 @@
 import argparse
 import hashlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -12,6 +13,7 @@ import re
 import shutil
 import stat
 import subprocess
+import tarfile
 import tempfile
 
 GUEST = Path(__file__).resolve().parents[1]
@@ -139,6 +141,32 @@ def plan(root):
     return plans
 
 
+def portable_database(data):
+    # Older local databases carry filesystem-specific flags such as nocow.
+    # repo-add extracts them on /tmp, which may not support those flags.
+    output = io.BytesIO()
+    with tarfile.open(fileobj=io.BytesIO(data)) as source, \
+            tarfile.open(fileobj=output, mode="w:gz") as destination:
+        for member in source:
+            member.pax_headers.pop("SCHILY.fflags", None)
+            destination.addfile(member, source.extractfile(member) if member.isfile() else None)
+    return output.getvalue()
+
+
+def verify_repository_records(before, after, version):
+    def records(data):
+        with tarfile.open(fileobj=io.BytesIO(data)) as archive:
+            return {member.name: archive.extractfile(member).read()
+                    for member in archive if member.isfile()}
+
+    original, updated = records(before), records(after)
+    if any(updated.get(name) != content for name, content in original.items()
+           if not name.startswith("omarchy-keyring-")):
+        raise ValueError("local repository update changed or lost an existing package record")
+    if f"omarchy-keyring-{version}/desc" not in updated:
+        raise ValueError("local repository update omitted the reviewed keyring")
+
+
 def keyring_plans(root):
     pin = json.loads((GUEST / "spec.json").read_text())["supplyChain"]["omarchyKeyring"]
     archive_path = regular(root, REPO + "/" + pin["filename"], optional=True)
@@ -157,8 +185,9 @@ def keyring_plans(root):
         staged = Path(temporary)
         archive = module("prepare-omarchy-keyring").prepare(GUEST, staged)
         staged_db = staged / "try-omarchy.db.tar.gz"
-        staged_db.write_bytes(before)
+        staged_db.write_bytes(portable_database(before))
         subprocess.run(["repo-add", "--quiet", str(staged_db), str(archive)], check=True)
+        verify_repository_records(before, staged_db.read_bytes(), pin["version"])
         return [(archive_path, archive_path.read_bytes() if archive_path.exists() else None, archive.read_bytes()),
                 (database, before, staged_db.read_bytes()),
                 (sync, sync.read_bytes() if sync.exists() else None, staged_db.read_bytes())]

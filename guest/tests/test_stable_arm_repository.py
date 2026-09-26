@@ -1,6 +1,7 @@
 import contextlib
 import importlib.util
 import io
+import tarfile
 import json
 import os
 from pathlib import Path
@@ -243,6 +244,37 @@ class StableArmRepositoryTests(unittest.TestCase):
                     exec(helpers + chain, {"spec": changed})
         lock = json.loads((GUEST / "packages.lock.json").read_text())
         self.assertEqual(spec["supplyChain"]["omarchyKeyring"]["version"], lock["packages"]["omarchy-keyring"])
+
+    def test_repository_flags_are_removed_without_changing_records(self):
+        stream = io.BytesIO()
+        with tarfile.open(fileobj=stream, mode="w:gz") as archive:
+            entry = tarfile.TarInfo("fixture-1-1/desc")
+            entry.pax_headers = {"SCHILY.fflags": "nocow", "mtime": "123.5"}
+            entry.size = len(b"original package record")
+            archive.addfile(entry, io.BytesIO(b"original package record"))
+        portable = migration.portable_database(stream.getvalue())
+        with tarfile.open(fileobj=io.BytesIO(portable)) as archive:
+            entry = archive.getmember("fixture-1-1/desc")
+            self.assertNotIn("SCHILY.fflags", entry.pax_headers)
+            self.assertEqual(entry.pax_headers["mtime"], "123.5")
+            self.assertEqual(archive.extractfile(entry).read(), b"original package record")
+
+    def test_repository_update_rejects_lost_or_changed_package_records(self):
+        def database(records):
+            stream = io.BytesIO()
+            with tarfile.open(fileobj=stream, mode="w:gz") as archive:
+                for name, data in records.items():
+                    entry = tarfile.TarInfo(name)
+                    entry.size = len(data)
+                    archive.addfile(entry, io.BytesIO(data))
+            return stream.getvalue()
+
+        original = {"fixture-1-1/desc": b"original"}
+        keyring = {"omarchy-keyring-20251027-1/desc": b"keyring"}
+        migration.verify_repository_records(database(original), database(original | keyring), "20251027-1")
+        for records in (keyring, keyring | {"fixture-1-1/desc": b"changed"}, original):
+            with self.assertRaises(ValueError):
+                migration.verify_repository_records(database(original), database(records), "20251027-1")
 
     def test_keyring_digest_failure_does_not_publish_an_archive(self):
         destination = self.root / "package-output"
