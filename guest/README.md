@@ -62,6 +62,22 @@ direct-boot kernel and matching headers are held, while the packaged
 repository. A separate migration channel is required before those
 Try-Omarchy-specific revisions can advance on an existing disk without reset.
 
+Runtime pacman configuration uses Omarchy's signed `stable/aarch64` application
+repository alongside Arch Linux ARM. The builder derives a separate legacy
+keyring-only Omarchy repository so the reviewed factory transaction does not
+start resolving mutable stable applications. `supplyChain.omarchyKeyring`
+pins that bootstrap archive; `prepare-omarchy-keyring.py` verifies its hash,
+package identity, and all three keyring payloads against the vendored keys
+before retaining it in the local repository. This keeps the installed keyring
+represented after normal updates refresh the stable database.
+
+The `stable-arm-package-channel` backport reports `arm / stable` independently
+of the pinned runtime and refuses unsupported upstream channel switching.
+The [explicit existing-guest migration](../README.md#enabling-stable-arm-applications-in-an-existing-vm)
+previews changes, validates the exact reviewed command preimages, and backs up
+both pacman configurations and affected files before applying. Updating the
+Mac app does not run this migration.
+
 The kernel reboot check recognizes package-owned `modules.builtin` metadata as
 well as `vmlinuz` under `/usr/lib/modules/<release>/`. Arch Linux ARM does not
 place `vmlinuz` there, so requiring that file alone produces a false kernel-update
