@@ -600,7 +600,8 @@ sudo python3 guest/scripts/migrate-stable-arm-repository.py --apply
 The first command previews configuration and command changes without writing
 or downloading anything. Apply changes both the saved and active pacman
 configurations, requires trusted package signatures, removes the old Cursor
-refusal, and updates the channel commands. It retains the checksum-verified
+refusal, and updates the channel commands. Older guests without the unavailable-app
+helper and list are supported without adding them. It retains the checksum-verified
 bootstrap keyring package in the existing local repository because the stable
 repository does not publish it. It does not install or upgrade packages.
 

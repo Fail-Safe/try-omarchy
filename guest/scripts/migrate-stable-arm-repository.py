@@ -99,10 +99,14 @@ def plan(root):
     for relative in CONFIGS:
         path = regular(root, relative)
         add(relative, update_config(path.read_bytes().decode()).encode())
-    path = regular(root, DENYLIST)
-    content = path.read_bytes().decode()
-    add(DENYLIST, "".join(line for line in content.splitlines(keepends=True)
-                           if line.split("\t", 1)[0] != "cursor-bin").encode())
+    path = regular(root, DENYLIST, optional=True)
+    if path.exists():
+        content = path.read_bytes().decode()
+        add(DENYLIST, "".join(line for line in content.splitlines(keepends=True)
+                               if line.split("\t", 1)[0] != "cursor-bin").encode())
+    elif any(os.path.lexists(root / directory / "omarchy-pkg-refuse-aarch64-unavailable")
+             for directory in ("usr/local/bin", "usr/bin")):
+        raise ValueError("unavailable-app helper is installed but its package list is missing")
     spec = json.loads((GUEST / "spec.json").read_text())
     backport = next(item for item in spec["authenticity"]["backports"]
                     if item["id"] == "stable-arm-package-channel")

@@ -102,6 +102,25 @@ class StableArmRepositoryTests(unittest.TestCase):
             prepare.assert_not_called()
         self.assertEqual(self.files(), before)
 
+    def test_older_guest_without_refusal_helper_or_list_can_migrate(self):
+        (self.root / migration.DENYLIST).unlink()
+        migration.apply_plans(self.root, migration.plan(self.root))
+        self.assertFalse((self.root / migration.DENYLIST).exists())
+        self.assertIn(migration.STABLE, (self.root / migration.CONFIGS[0]).read_text())
+        before = self.files()
+        migration.apply_plans(self.root, migration.plan(self.root))
+        self.assertEqual(self.files(), before)
+
+    def test_missing_list_with_installed_refusal_helper_requires_review(self):
+        (self.root / migration.DENYLIST).unlink()
+        helper = self.root / "usr/local/bin/omarchy-pkg-refuse-aarch64-unavailable"
+        helper.parent.mkdir(parents=True, exist_ok=True)
+        helper.write_text("#!/bin/bash\n")
+        before = self.files()
+        with self.assertRaisesRegex(ValueError, "package list is missing"):
+            migration.plan(self.root)
+        self.assertEqual(self.files(), before)
+
     def test_apply_preserves_independent_settings_modes_refresh_and_repeat(self):
         active = self.root / migration.CONFIGS[1]
         active.write_text(LEGACY.replace("custom\n", "active-only\n"))
