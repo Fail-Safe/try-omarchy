@@ -12,7 +12,15 @@ make guest
 
 The privileged ARM64 Docker build writes verified artifacts to `dist/guest/`.
 Its persistent package/source cache lives in a project-scoped Docker volume, so
-repeat builds do not start from zero.
+repeat builds do not start from zero. Before resolving the factory transaction,
+the builder exposes cached archives whose package identities exactly match the
+reviewed factory lock or Hyprland build-package pins through a temporary
+signed-package repository. Detached signatures
+must verify against the builder's trusted keys; incomplete cache entries are
+ignored unless explicitly required by the specification. Missing packages still
+resolve from the configured mirrors, and the complete transaction must match the
+lock before installation. This permits rebuilds after rolling mirrors remove old
+versions without changing the finished guest's repository configuration.
 
 Useful lower-level commands:
 
