@@ -1296,6 +1296,11 @@ def main() -> None:
 
     finalizer = read(GUEST / "scripts/finalize-rootfs.sh")
     check("factory" in finalizer and "aarch64" in finalizer, "finalizer enforces the native factory contract")
+    check(
+        "USER=root OMARCHY_PATH=/usr/share/omarchy /usr/bin/omarchy-apply-lock" in finalizer
+        and "stat -c '%u:%g:%a' /etc/pam.d/omarchy-lock-password" in finalizer,
+        "factory initializes upstream lock authentication and checks policy permissions",
+    )
     check("systemd-growfs-root.service" in finalizer, "factory disk grows on first boot")
     check("systemctl enable omarchy-native-mac-share.service" in finalizer, "shared Mac folder mounts at boot")
     check("systemctl enable systemd-timesyncd.service" in finalizer, "guest time synchronization starts at boot")
