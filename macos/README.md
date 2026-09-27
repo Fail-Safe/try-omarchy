@@ -159,3 +159,17 @@ These changes mitigate audio interruptions when graphics work delays device
 servicing; they do not remove blocking graphics work or guarantee uninterrupted
 playback under every load. See [audio validation](../docs/audio-continuity.md)
 for the reproduction procedure, observations, and latency limitations.
+
+### Remote keyboard text injection
+
+Cocoa translates directly representable printable ASCII text supplied with a
+placeholder key code by
+remote-control tools into balanced guest key presses. Translation uses the
+current Mac keyboard layout, so the guest layout must match it. Physical-key
+events and Command/Control/Option shortcuts retain their normal behavior.
+Unsupported batches (including non-ASCII text, control characters, or text
+requiring a currently held key or more queue space than is available) are ignored as a whole rather than producing
+stray A presses or partial text. Accepted characters are paced through QEMU's
+input queue so long batches do not overflow the virtual keyboard. This is not a
+Unicode/IME input bridge: characters requiring Option/AltGr or dead-key
+composition are not supported.
