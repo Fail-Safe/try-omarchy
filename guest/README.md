@@ -90,6 +90,20 @@ instead of claiming either a match or an update. Other reboot and service-restar
 reasons still apply. This check ships as the `update-restart-arm-kernel` reviewed
 backport, with a fixture from the pinned upstream command for regression tests.
 
+The factory runs upstream `omarchy-apply-lock` to configure the password PAM
+service required by the Quickshell lock screen. Without it, the shell refuses
+to lock, and the menu, shortcut, and `omarchy system lock` appear to do nothing.
+Existing guests can install the same policy from a guest terminal:
+
+```sh
+sudo omarchy-apply-lock
+```
+
+This uses Omarchy's upstream authentication policy and the existing guest
+password; it does not reset the password. Quickshell notices the new policy
+without a reboot. Test `omarchy system lock`, then unlock with the guest
+password. Updating the Mac app alone does not repair an existing guest disk.
+
 The factory includes the pinned upstream `omarchy-dns` and
 `omarchy-theme-browser` sudoers drop-ins, owned by `try-omarchy-runtime` with
 root ownership and mode `0440`. These grant wheel users passwordless access
