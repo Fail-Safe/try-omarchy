@@ -59,10 +59,23 @@ int main(void) { @autoreleasepool {
     assert(count==0 && delays==0);
     reset();assert(![p handleInjectedText:event(@"a",true,0,0,0)]);
     assert(![p handleInjectedText:event(@"a",true,0,0,42)]);
+    reset();assert([p handleInjectedText:event(@"A",true,0,kCGEventFlagMaskShift,42)]);
+    assert(count==4 && events[0][0]==KEY_LEFTSHIFT && events[0][1]==1);
+    assert(events[1][0]==kVK_ANSI_A && events[1][1]==1);
+    assert(events[2][0]==kVK_ANSI_A && events[2][1]==0);
+    assert(events[3][0]==KEY_LEFTSHIFT && events[3][1]==0);
+    assert([p handleInjectedText:event(@"a",false,0,kCGEventFlagMaskShift,42)]);
+    reset();held[KEY_LEFTSHIFT]=true;
     assert(![p handleInjectedText:event(@"A",true,0,kCGEventFlagMaskShift,42)]);
-    assert(![p handleInjectedText:event(@"1234",true,0,kCGEventFlagMaskCommand,42)]);
-    assert(![p handleInjectedText:event(@"1234",true,0,kCGEventFlagMaskControl,42)]);
-    assert(![p handleInjectedText:event(@"1234",true,0,kCGEventFlagMaskAlternate,42)]);
+    reset();assert(![p handleInjectedText:event(@"a",true,0,kCGEventFlagMaskCommand,42)]);
+    assert(![p handleInjectedText:event(@"\001",true,0,kCGEventFlagMaskControl,42)]);
+    assert(![p handleInjectedText:event(@"å",true,0,kCGEventFlagMaskAlternate,42)]);
+    assert([p handleInjectedText:event(@"1234",true,0,kCGEventFlagMaskCommand,42)]);
+    assert(count==0);assert([p handleInjectedText:event(@"a",false,0,kCGEventFlagMaskCommand,42)]);
+    reset();assert([p handleInjectedText:event(@"1234",true,0,kCGEventFlagMaskControl,42)]);
+    assert(count==0);
+    reset();assert([p handleInjectedText:event(@"1234",true,0,kCGEventFlagMaskAlternate,42)]);
+    assert(count==0);
     assert(![p handleInjectedText:event(@"1",true,kVK_ANSI_1,0,42)]);assert(count==0);
     reset();assert([p handleInjectedText:event(@"Hello!",true,0,0,42)]);
     assert(count>12);for(int i=0;i<512;i++)assert(!held[i]);
@@ -84,5 +97,8 @@ int main(void) { @autoreleasepool {
     assert([p handleInjectedText:event(@"1234",true,0,0,42)]);
     assert(events[0][0]==KEY_LEFTSHIFT && events[0][1]==1);
     for(int i=0;i<512;i++)assert(!held[i]);
+    layout(@"com.apple.keylayout.USInternational-PC");reset();
+    assert([p handleInjectedText:event(@"abc'd",true,0,0,42)]);assert(count==0);
+    assert([p handleInjectedText:event(@"'",false,0,0,42)]);assert(count==0);
     CFRelease(layoutSource);puts("injected text: batches, physical keys, shortcuts, layouts, caps/shift, held keys, Unicode and trailing releases passed");
 }}
