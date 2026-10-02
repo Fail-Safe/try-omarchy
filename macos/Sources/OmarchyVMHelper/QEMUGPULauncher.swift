@@ -772,6 +772,8 @@ enum CameraPreflight {
 final class QEMUGPUProcessSupervisor: @unchecked Sendable {
     enum LaunchEvent: Equatable {
         case virtualMachineReady(qmpSocketPath: String?)
+        case resetProgress(VMResetPhase)
+        case launchProgress(VMLaunchPhase)
     }
 
     struct StandardErrorDrain {
@@ -792,6 +794,8 @@ final class QEMUGPUProcessSupervisor: @unchecked Sendable {
     private var errorPipe: Pipe?
     private var errorBuffer = ""
     private var didReportVirtualMachineStart = false
+    private var resetProgressStream: VMProgressStream<VMResetPhase>?
+    private var launchProgressStream: VMProgressStream<VMLaunchPhase>?
 
     func start(
         executableURL: URL,
@@ -859,6 +863,9 @@ final class QEMUGPUProcessSupervisor: @unchecked Sendable {
         errorPipe = pipe
         errorBuffer = ""
         didReportVirtualMachineStart = false
+        let isReset = arguments.first == QEMUGPUStorageOption.resetStorageOnly.rawValue
+        resetProgressStream = isReset ? VMProgressStream(operation: .reset) : nil
+        launchProgressStream = isReset ? nil : VMProgressStream(operation: .launch)
         lock.unlock()
 
         do {
@@ -998,7 +1005,8 @@ final class QEMUGPUProcessSupervisor: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         errorBuffer += String(decoding: data, as: UTF8.self)
-        var launchEvents: [LaunchEvent] = []
+        var launchEvents = (resetProgressStream?.append(data) ?? []).map(LaunchEvent.resetProgress)
+        launchEvents += (launchProgressStream?.append(data) ?? []).map(LaunchEvent.launchProgress)
         if !didReportVirtualMachineStart,
            let event = Self.virtualMachineReadyEvent(in: errorBuffer) {
             didReportVirtualMachineStart = true

@@ -195,7 +195,11 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
     private var microphoneRequestInFlight = false
     private var cameraRequestInFlight = false
     private var resetInProgress = false
+    private var resetPhase = VMResetPhase.checking
+    private weak var resetActionButton: OmarchyActionButton?
     private var launchInProgress = false
+    private var launchPhase = VMLaunchPhase.checking
+    private weak var launchActionButton: OmarchyActionButton?
     private var virtualMachineRunning = false
     private var closeRunningSettings: (() -> Void)?
     private var shutdownInProgress = false
@@ -487,6 +491,36 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         window.orderOut(nil)
     }
 
+    func launchDidProgress(to phase: VMLaunchPhase) {
+        guard launchInProgress, launchPhase != phase else { return }
+        launchPhase = phase
+        launchActionButton?.updateTitle(phase.buttonTitle)
+        launchActionButton?.invalidateIntrinsicContentSize()
+        NSAccessibility.post(
+            element: window,
+            notification: .announcementRequested,
+            userInfo: [
+                .announcement: phase.buttonTitle,
+                .priority: NSAccessibilityPriorityLevel.medium.rawValue,
+            ]
+        )
+    }
+
+    func resetDidProgress(to phase: VMResetPhase) {
+        guard resetInProgress, resetPhase != phase else { return }
+        resetPhase = phase
+        resetActionButton?.updateTitle(phase.buttonTitle)
+        resetActionButton?.invalidateIntrinsicContentSize()
+        NSAccessibility.post(
+            element: window,
+            notification: .announcementRequested,
+            userInfo: [
+                .announcement: phase.buttonTitle,
+                .priority: NSAccessibilityPriorityLevel.medium.rawValue,
+            ]
+        )
+    }
+
     func resetDidFinish(errorMessage: String?) {
         guard resetInProgress else { return }
         resetInProgress = false
@@ -499,11 +533,11 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
             alert.informativeText = errorMessage
         } else {
             alert.alertStyle = .informational
-            alert.messageText = "Omarchy has been reset"
+            alert.messageText = "Try Omarchy has been reset"
             if let estimate = pendingResetSpaceEstimate {
-                alert.informativeText = "The VM is back to factory settings. Up to \(estimate) of disk space was reclaimed. You can launch whenever you’re ready."
+                alert.informativeText = "The VM has been deleted. Up to \(estimate) of disk space was reclaimed. A fresh VM will be prepared on the next launch."
             } else {
-                alert.informativeText = "The VM is back to factory settings. You can launch whenever you’re ready."
+                alert.informativeText = "The VM has been deleted. A fresh VM will be prepared on the next launch."
             }
         }
         pendingResetSpaceEstimate = nil
@@ -522,7 +556,7 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
     /// Clears the resetting state when the controller refused to start the
     /// reset at all. Deliberately silent, and deliberately not
     /// `resetDidFinish(errorMessage: nil)` — nothing was erased, so claiming
-    /// "Omarchy has been reset" would be a lie about a destructive action.
+    /// "Try Omarchy has been reset" would be a lie about a destructive action.
     func resetDidAbort() {
         guard resetInProgress else { return }
         resetInProgress = false
@@ -854,11 +888,12 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         let integrationHeading = sectionHeading("INTEGRATIONS")
 
         let reset = OmarchyActionButton(
-            title: resetInProgress ? "Resetting Omarchy…" : "Reset Omarchy",
+            title: resetInProgress ? resetPhase.buttonTitle : "Reset Omarchy",
             style: .danger,
             target: self,
             action: #selector(resetOmarchy)
         )
+        resetActionButton = reset
         reset.identifier = NSUserInterfaceItemIdentifier("reset-button")
         reset.isEnabled = canResetStorage
             && !prelaunchControlsLocked
@@ -876,13 +911,14 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         manage.isEnabled = !controlsBusy
         let resetAction = virtualMachineRunning && canResetStorage ? manage : reset
 
-        let launchButtonTitle = virtualMachineRunning ? "Done" : (launchInProgress ? "Launching Omarchy…" : "Launch Omarchy")
+        let launchButtonTitle = virtualMachineRunning ? "Done" : (launchInProgress ? launchPhase.buttonTitle : "Launch Omarchy")
         let launchButton = OmarchyActionButton(
             title: launchButtonTitle,
             style: .primary,
             target: self,
             action: virtualMachineRunning ? #selector(closeSettings) : #selector(launchOmarchy)
         )
+        launchActionButton = launchButton
         launchButton.keyEquivalent = launchInProgress ? "" : "\r"
         launchButton.isEnabled = virtualMachineRunning || (!launchInProgress
             && !resetInProgress)
@@ -1034,6 +1070,9 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
             )
         )
         scrollView.reflectScrolledClipView(scrollView.contentView)
+        if resetInProgress {
+            reset.scrollToVisible(reset.bounds)
+        }
         updatePermissionRequestControls()
     }
 
@@ -1714,6 +1753,7 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
             // controller, which owns the preference and can explain and offer
             // to switch, rather than asking the user to confirm erasing a
             // workspace we would only be guessing the identity of.
+            resetPhase = .checking
             resetInProgress = true
             render()
             resetStorage()
@@ -1735,6 +1775,7 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
             resetConfirmationPrompt = nil
             guard confirmed else { return }
             pendingResetSpaceEstimate = estimate
+            resetPhase = .checking
             resetInProgress = true
             render()
             resetStorage()
@@ -1773,6 +1814,7 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
               !resetInProgress,
               !microphoneRequestInFlight,
               !cameraRequestInFlight else { return }
+        launchPhase = .checking
         launchInProgress = true
         render()
         launch()

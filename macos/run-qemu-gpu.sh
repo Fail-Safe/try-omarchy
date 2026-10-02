@@ -43,6 +43,10 @@ case ${1:-} in
 esac
 (( $# <= 1 )) || usage
 
+if ((reset_only == 0)); then
+  echo '[qemu-gpu] Launch phase: checking' >&2
+fi
+
 script_dir=$(cd "$(dirname "$0")" && pwd -P)
 resources_dir=$(cd "$script_dir/.." && pwd -P)
 contents_dir=$(cd "$resources_dir/.." && pwd -P)
@@ -1476,6 +1480,12 @@ recover_persistent_boot_kit() {
   echo '[qemu-gpu] Saved VM boot files recovered; continuing normal launch.' >&2
 }
 
+if ((reset_only)); then
+  qemu_persistent_storage_reset "$bundle_identity" || fail 'could not clear the VM disk'
+  echo '[qemu-gpu] Reset complete.' >&2
+  exit 0
+fi
+
 umask 077
 work_dir=$(mktemp -d '/private/tmp/omarchy-qemu-gpu.XXXXXX') || {
   fail "could not create a private temporary directory"
@@ -1531,15 +1541,10 @@ if (( selected_existing == 0 )); then
     expanded_disk_bytes=$disk_capacity_bytes
   fi
   source_disk="$guest_dir/rootfs.ext4"
+  source_decoder=''
   if [[ ! -e $source_disk && ! -L $source_disk ]]; then
-    qemu_persistent_storage_materialize_source \
-      "$bundle_identity" \
-      "$guest_dir/rootfs.ext4.zst" \
-      "$compressed_disk_bytes" \
-      "$source_disk_sha" \
-      "$source_disk_bytes" \
-      "$resources_dir/runtime/bin/zstd" || fail "could not materialize the bundled root disk"
-    source_disk=$QEMU_IMMUTABLE_SOURCE_DISK
+    source_disk="$guest_dir/rootfs.ext4.zst"
+    source_decoder="$resources_dir/runtime/bin/zstd"
   fi
   if qemu_persistent_storage_select \
     "$storage_mode" \
@@ -1551,7 +1556,8 @@ if (( selected_existing == 0 )); then
     "$expanded_disk_bytes" \
     "$bundled_kernel" \
     "$bundled_initramfs" \
-    "$kernel_command_line"; then
+    "$kernel_command_line" \
+    "$source_decoder"; then
     :
   else
     storage_status=$?
@@ -1589,12 +1595,6 @@ case " $launch_kernel_command_line " in
     fail "selected kernel command line contains a launcher-owned VirGL capability argument"
     ;;
 esac
-
-if ((reset_only)); then
-  qemu_persistent_storage_release_lock
-  echo "[qemu-gpu] Reset complete." >&2
-  exit 0
-fi
 
 if [[ -n $disk_capacity_bytes && $storage_mode == persistent && ${OMARCHY_QEMU_GPU_DRY_RUN:-0} == 0 ]]; then
   qemu_persistent_storage_grow_selected "$disk_capacity_bytes" "$native_bridge" || \
@@ -1865,6 +1865,7 @@ if [[ -n $shared_folder ]]; then
   echo "[qemu-gpu] Shared folder: $shared_folder (guest ~/$shared_folder_name)" >&2
 fi
 echo "[qemu-gpu] Port forwarding: $port_forwarding_summary" >&2
+echo '[qemu-gpu] Launch phase: starting' >&2
 "$qemu_bin" "${qemu_args[@]}" &
 qemu_pid=$!
 printf '%s\n' "$qemu_pid" >"$work_dir/.qemu.pid"
