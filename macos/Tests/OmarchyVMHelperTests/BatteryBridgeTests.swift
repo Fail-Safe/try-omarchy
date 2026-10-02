@@ -95,6 +95,126 @@ import Testing
         ])
         #expect(snapshot.percentage == 50)
     }
+
+    @Test func chargeLimitIsOptionalAndIndependentOfCurrentCharge() throws {
+        let snapshot = HostBatterySnapshot(descriptions: [description(percent: 42)], chargeLimit: 95)
+        #expect(snapshot.percentage == 42)
+        #expect(snapshot.chargeLimit == 95)
+        let legacy = try JSONSerialization.jsonObject(with: snapshot.encode()) as! [String: Any]
+        #expect(legacy["chargeLimit"] == nil)
+        let extended = try JSONSerialization.jsonObject(with: snapshot.encode(includeChargeLimit: true)) as! [String: Any]
+        #expect(extended["chargeLimit"] as? Int == 95)
+        for limit in [0, 100, 101] {
+            #expect(HostBatterySnapshot(descriptions: [description()], chargeLimit: limit).chargeLimit == nil)
+        }
+        #expect(HostBatterySnapshot(descriptions: [], chargeLimit: 95).chargeLimit == nil)
+    }
+
+    @Test func changingOnlyTheChargeLimitSendsANewSnapshot() {
+        var policy = BatterySendPolicy()
+        policy.markSent(HostBatterySnapshot(descriptions: [description()], chargeLimit: 80))
+        #expect(policy.shouldSend(HostBatterySnapshot(descriptions: [description()], chargeLimit: 95), forced: false))
+    }
+
+    @Test func physicalDetailsAreNegotiatedIndependentlyAndAbsentBatteryClearsThem() throws {
+        let details = HostBatteryDetails(properties: ["CycleCount": 213])
+        let snapshot = HostBatterySnapshot(descriptions: [description()], chargeLimit: 95, details: details)
+        let limitOnly = try JSONSerialization.jsonObject(with: snapshot.encode(includeChargeLimit: true)) as! [String: Any]
+        #expect(limitOnly["cycleCount"] == nil)
+        let extended = try JSONSerialization.jsonObject(with: snapshot.encode(includeChargeLimit: true, includeBatteryDetails: true)) as! [String: Any]
+        #expect(extended["cycleCount"] as? Int == 213)
+        #expect(extended["chargeFullMicroAh"] is NSNull)
+        let absent = HostBatterySnapshot(descriptions: [], details: details)
+        #expect(absent.details.cycleCount == nil)
+        var policy = BatterySendPolicy()
+        policy.markSent(snapshot)
+        #expect(policy.shouldSend(HostBatterySnapshot(descriptions: [description()], chargeLimit: 95,
+            details: HostBatteryDetails(properties: ["CycleCount": 214])), forced: false))
+    }
+}
+
+@Suite struct HostBatteryDetailsTests {
+    @Test func nestedAppleSiliconReadingsUsePhysicalUnits() {
+        let details = HostBatteryDetails(properties: [
+            "CurrentCapacity": 95, "MaxCapacity": 100, "Voltage": 12537, "CycleCount": 213,
+            "BatteryData": ["RemainingCapacity": 4652, "FullChargeCapacity": 4970, "DesignCapacity": 6075],
+        ])
+        #expect(details.chargeNowMicroAh == 4_652_000)
+        #expect(details.chargeFullMicroAh == 4_970_000)
+        #expect(details.chargeFullDesignMicroAh == 6_075_000)
+        #expect(details.voltageMicroV == 12_537_000)
+        #expect(details.cycleCount == 213)
+    }
+
+    @Test func olderRawReadingsAndZeroCyclesAreSupported() {
+        let details = HostBatteryDetails(properties: [
+            "AppleRawCurrentCapacity": 0, "AppleRawMaxCapacity": 4970,
+            "DesignCapacity": 6075, "CycleCount": 0,
+        ])
+        #expect(details.chargeNowMicroAh == 0)
+        #expect(details.chargeFullMicroAh == 4_970_000)
+        #expect(details.chargeFullDesignMicroAh == 6_075_000)
+        #expect(details.cycleCount == 0)
+        #expect(details.voltageMicroV == nil)
+    }
+
+    @Test func normalizedAndMalformedReadingsNeverBecomePhysicalCapacity() {
+        let normalized = HostBatteryDetails(properties: ["CurrentCapacity": 95, "MaxCapacity": 100])
+        #expect(normalized.chargeNowMicroAh == nil)
+        #expect(normalized.chargeFullMicroAh == nil)
+        for value in [true, -1, 0, Int.max, 1.5, "4970"] as [Any] {
+            let details = HostBatteryDetails(properties: ["AppleRawMaxCapacity": value, "Voltage": value])
+            #expect(details.chargeFullMicroAh == nil)
+            #expect(details.voltageMicroV == nil)
+        }
+        #expect(HostBatteryDetails(properties: ["CycleCount": true]).cycleCount == nil)
+    }
+}
+
+@objc(TryOmarchyTestChargingPolicy)
+final class TestChargingPolicy: NSObject, NSSecureCoding {
+    static var supportsSecureCoding: Bool { true }
+    let reason: String
+    let limit: Int
+    let terminated: Bool
+
+    init(_ reason: String, limit: Int, terminated: Bool = false) {
+        self.reason = reason
+        self.limit = limit
+        self.terminated = terminated
+    }
+    required init?(coder: NSCoder) { fatalError("Encoding fixture only") }
+    func encode(with coder: NSCoder) {
+        coder.encode(reason as NSString, forKey: "reason")
+        coder.encode(limit, forKey: "soclimit")
+        coder.encode(terminated, forKey: "terminated")
+    }
+}
+
+@Suite struct HostChargeLimitTests {
+    private func plist(_ policies: [TestChargingPolicy]) throws -> Data {
+        let encoder = NSKeyedArchiver(requiringSecureCoding: true)
+        encoder.setClassName("ChargeCtrlPolicy", for: TestChargingPolicy.self)
+        encoder.encode(policies as NSArray, forKey: NSKeyedArchiveRootObjectKey)
+        encoder.finishEncoding()
+        return try PropertyListSerialization.data(fromPropertyList: ["policies": encoder.encodedData], format: .binary, options: 0)
+    }
+
+    @Test func onlyActiveManualPoliciesSupplyALimit() throws {
+        #expect(HostChargeLimit.read(try plist([
+            TestChargingPolicy("optimizedCharging", limit: 80),
+            TestChargingPolicy("manualChargeLimit", limit: 85, terminated: true),
+            TestChargingPolicy("manualChargeLimit", limit: 95),
+        ])) == 95)
+    }
+
+    @Test func missingDisabledAndMalformedPoliciesHaveNoLimit() throws {
+        #expect(HostChargeLimit.read(Data("invalid".utf8)) == nil)
+        #expect(HostChargeLimit.read(try plist([])) == nil)
+        for limit in [-1, 0, 100, 101] {
+            #expect(HostChargeLimit.read(try plist([TestChargingPolicy("manualChargeLimit", limit: limit)])) == nil)
+        }
+    }
 }
 
 @Suite struct BatterySendPolicyTests {
