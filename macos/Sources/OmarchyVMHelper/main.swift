@@ -282,7 +282,7 @@ do {
             ApplicationPresentation.installMainMenu(
                 in: application,
                 applicationName: "Try Omarchy",
-                updatesTarget: controller
+                actionsTarget: controller
             )
             application.delegate = controller
             for signalNumber in [SIGHUP, SIGINT, SIGTERM] {
