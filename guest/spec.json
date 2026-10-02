@@ -384,6 +384,20 @@
         ]
       },
       {
+        "id": "first-run-update-notification",
+        "description": "Clarify the first-login invitation for supported package updates and optional setup in the pinned Try Omarchy guest.",
+        "reference": "https://github.com/basecamp/omarchy/blob/c668141e9c42b13c80c9ca4ea108e11708c5e8a5/install/user/first-run/wifi.sh",
+        "patch": "patches/omarchy/first-run-update-notification.patch",
+        "patchSha256": "05d95049f1a6dd3efaa59c429d6922835e1c54b1d3b0286db30378f60eb7847f",
+        "targets": [
+          {
+            "path": "install/user/first-run/wifi.sh",
+            "beforeSha256": "4cc2621157be1efe6d449d1daa7b28d588e4a8e46127de493da03749af1ae5a7",
+            "afterSha256": "cbbffcfd2685c0b9853ee144a7acba64dfa9340cc65a3d144a925055810f0f66"
+          }
+        ]
+      },
+      {
         "id": "pkg-add-aarch64-unavailable",
         "description": "Refuse known aarch64-unavailable packages from omarchy-pkg-add with the shared message.",
         "reference": "https://github.com/basecamp/omarchy/blob/346e69e1cec6c4e8924531874af6ba010a1bc99e/bin/omarchy-pkg-add",
