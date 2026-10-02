@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import importlib.util
 import json
 import os
 import py_compile
@@ -194,6 +195,7 @@ def main() -> None:
             "keyboard-us-acentos",
             "ghostty-arm64-terminal",
             "mirror-macos-timezone",
+            "macos-power-profile",
         ],
         "Omarchy backports are explicitly ordered and identified",
     )
@@ -2206,6 +2208,49 @@ HOTPLUG=1
                         hashlib.sha256((staged_omarchy / target["path"]).read_bytes()).hexdigest()
                         == target["afterSha256"],
                         f"backport produces reviewed postimage: {backport['id']} {target['path']}",
+                    )
+
+            # Existing guests receive the same reviewed command and QML bytes
+            # through the app's boot payload, without replacing their disk.
+            profile_hooks = json.loads(read(
+                GUEST / "native-overlay/usr/local/share/try-omarchy/power-profile-hooks.json"
+            ))
+            profile_module_spec = importlib.util.spec_from_file_location(
+                "power_profile_installer",
+                GUEST / "native-overlay/usr/local/lib/try-omarchy/install-power-profile.py",
+            )
+            profile_installer = importlib.util.module_from_spec(profile_module_spec)
+            profile_module_spec.loader.exec_module(profile_installer)
+            upgrade_root = Path(temporary) / "upgrade"
+            profile_backport = next(b for b in backports if b["id"] == "macos-power-profile")
+            for hook, target in zip(profile_hooks, profile_backport["targets"]):
+                destination = upgrade_root / hook["path"]
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source / target["path"], destination)
+            profile_installer.install(upgrade_root, profile_hooks)
+            for hook, target in zip(profile_hooks, profile_backport["targets"]):
+                check(
+                    (upgrade_root / hook["path"]).read_bytes()
+                    == (staged_omarchy / target["path"]).read_bytes(),
+                    f"power profile boot upgrade matches factory: {target['path']}",
+                )
+                for previous in hook.get("previousVersions", []):
+                    # Reconstruct the reviewed earlier presentation and exercise
+                    # the upgrade path used by guests with an earlier label or button.
+                    legacy = (upgrade_root / hook["path"]).read_text()
+                    for before, after in reversed(previous["replacements"]):
+                        check(legacy.count(after) == 1, "legacy profile inverse is unambiguous")
+                        legacy = legacy.replace(after, before)
+                    check(
+                        hashlib.sha256(legacy.encode()).hexdigest() == previous["beforeSha256"],
+                        "earlier power profile presentation has its reviewed preimage",
+                    )
+                    (upgrade_root / hook["path"]).write_text(legacy)
+                    profile_installer.install(upgrade_root, [hook])
+                    check(
+                        (upgrade_root / hook["path"]).read_bytes()
+                        == (staged_omarchy / target["path"]).read_bytes(),
+                        "earlier power profile presentation upgrades to the current macOS button",
                     )
 
             onepassword_installer_path = (
