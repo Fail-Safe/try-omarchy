@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Install only the app's settings entry points, from its read-only boot share."""
+"""Install settings and compatible stock-script fixes from the app's boot share."""
 
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -125,8 +126,14 @@ def main():
         return
     if sys.argv[1:] or os.geteuid() != 0:
         raise SystemExit("Run the bundled installer as root, without arguments")
+    # Optional disk fixes have their own consent, journal, verification, and
+    # result channel. Always recover interrupted work, even on a skipped boot.
+    spec = importlib.util.spec_from_file_location("boot_fixes", payload / "migrate.py")
+    fixes = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fixes)
+    fixes.boot(payload)
     install_system(payload, Path("/"))
-    subprocess.run(["python3", "/usr/local/lib/try-omarchy/install-power-profile.py"], check=True)
+    # Power/menu plugin changes now participate in the reviewed file journal.
     subprocess.run(["python3", "/usr/local/lib/try-omarchy/install-timezone-menus.py"], check=True)
     # Run before owner provisioning, including in older unprovisioned factories.
     # The live service starts after provisioning so a different setup selection

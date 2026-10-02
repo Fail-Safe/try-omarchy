@@ -6,6 +6,12 @@ software rendering. Updating the Mac app does not replace files in an existing
 VM, so retiring that wrapper is a one-time, opt-in step. No factory reset or
 package removal is needed.
 
+The Mac launcher's **Update** review can now perform this stock-wrapper
+retirement on an approved boot, with verified file recovery. See
+[updates at launch](integration-updates.md#updates-at-launch). The manual path
+below remains available. Update also performs the eligible stale Apps cleanup
+as the desktop user before login.
+
 When Alacritty is installed, the migration helper only runs when the current
 boot advertises
 `omarchy.virgl_dual_source=1`, which the launcher supplies with the fixed VirGL
@@ -45,7 +51,8 @@ SSH access and sharing are not enabled automatically by this migration.
 
 ## Remove a stale Apps entry for an uninstalled Alacritty
 
-After retiring the unused wrapper, run the same copied helper **without sudo**:
+Update handles the recognized stale entry automatically. For manual cleanup
+after retiring the unused wrapper, run the copied helper **without sudo**:
 
 ```sh
 /usr/bin/python3 -I /mnt/mac/try-omarchy-migrate-alacritty --launcher
@@ -78,8 +85,8 @@ Alacritty configuration, or the packaged `/usr/bin/alacritty` executable.
 The new factory image also includes a service that invokes the helper before
 the graphical login manager. The helper checks the runtime marker itself when
 Alacritty is installed. That service is **not automatically
-installed into older guests**; the one-time copied helper is the existing-guest
-migration path.
+installed into older guests**; the app's consent-gated boot runner or the
+one-time copied helper provides the existing-guest migration path.
 
 If reverting to an older host runtime, the retained wrapper can be restored
 without overwriting a newly created custom wrapper:

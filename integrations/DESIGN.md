@@ -2,11 +2,23 @@
 
 Status: standalone integration delivery on current upstream; the payload is sudo Touch ID support and the Mac battery mirror.
 
+The Mac launcher also has a separate consent-gated boot-file migration path.
+It reuses the existing settings boot payload and settings status port for exact
+stock repairs, integration bootstrap/support, and eligible battery migration.
+It plans the reviewed destinations directly; it does not invoke arbitrary shell
+installers. Battery kbuild staging precedes the file journal and publishes the
+verified module with DKMS receipts. Authentication enrollment remains separate. The review, Skip
+confirmation, disk/bundle-bound consent, durable file journal, interrupted
+recovery, and per-fix results are documented in
+[integration updates](../docs/integration-updates.md#updates-at-launch).
+
 The app bundles a reviewed integration payload independently of the factory disk.
 A dedicated read-only 9p share (tryomarchy-updates) exposes it to old guests.
-Users approve the first mount/install inside the guest with their Linux password.
+Normal supported bootstrap is handled by **Update and Launch**. The manual
+fallback still lets users approve mount/install with their Linux password.
 No SSH, personal folder sharing, disk mutation from macOS, or typed-command
-injection is required. The launcher offers the exact bootstrap command to copy.
+injection is required. The integration-update documentation supplies the exact
+bootstrap command for manual fallback.
 
 A root-owned guest service reports bounded JSON over a dedicated virtio port.
 The host checks on every boot, retains last-known status alongside that VM's disk,
@@ -28,18 +40,22 @@ customized files, disabled optional features, and an actual old-guest bootstrap.
 
 ## Implemented user journey
 
-The launcher has a VM integrations row even before bootstrap. Review opens
-instructions and a Copy setup command button. It mounts only the app's dedicated
-read-only bundle and starts a guest terminal guide. The guide inventories the
-supported integration and offers a separate sudo Touch ID pairing/test action. Linux sudo authorization
-occurs only after the review confirmation. sudo biometric pairing remains a
-separate explicit action.
+The launcher offers **Update** when the selected disk needs a check against the
+current boot-fix bundle. **Update and Launch** applies eligible repairs before
+login and reports per-component results in Settings. There is no separate
+manual-install banner or menu-bar prompt.
 
-A live status menu appears on macOS while QEMU runs. It starts at Checking and
-receives guest reports every ten seconds. At 120 seconds without a report it
-shows Setup or repair needed; it continues listening for a late boot or repair.
-The persisted result is labeled Last check in the launcher. Guest time is never
-used to determine freshness. State lives at the VM storage root, keyed by the working disk's file identity,
+The guest guide inventories support, directs routine updates to the launcher,
+and offers optional sudo Touch ID pairing/testing and a labeled manual repair
+fallback. The fallback mounts only the app's dedicated read-only bundle.
+Linux sudo authorization occurs only after the manual review confirmation.
+Biometric pairing remains a separate explicit action.
+
+The host checks silently while QEMU runs and receives guest reports every ten
+seconds. After 120 seconds without a report it records no response and continues
+listening for a late boot or repair. These advisory reports do not open UI or
+authorize installation. Guest time is never used to determine freshness.
+State lives at the VM storage root, keyed by the working disk's file identity,
 so reset and alternate VM locations do not inherit another VM's result. The
 strict disk-directory inventory remains unchanged.
 
