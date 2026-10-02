@@ -93,8 +93,8 @@ This change does not alter the upstream bar layout or make that conditional
 row visible while charging or discharging. On disconnect, the guest clears
 the limit along with the time estimates.
 
-Existing guests need **Install/update integration support** to build and load
-the 1.2.0 module and restart the agent. The installer reloads an older loaded
+Existing guests can use **Update and Launch** to build and load the 1.2.0
+module and restart the agent. The update reloads an older loaded
 module; integration status checks the loaded version as well as the DKMS build.
 
 ## Time estimates
@@ -187,10 +187,14 @@ launch. No factory reset is needed: images from v0.3.0 onward carry `dkms`,
 `gcc`, `make`, `kmod`, and headers matching the pinned kernel, so the guest can
 build the module itself.
 
-Install it with the app's [VM integrations](integration-updates.md): open
-**VM integrations > Review…** in the launcher, or **Setup > Try Omarchy
-Integrations** inside Omarchy, and choose **Install/update integration
-support**. The integration runs
+Choose **Update and Launch** to build and install the battery integration
+automatically against the VM's current kernel. Missing build tools or matching
+headers are skipped, without downloading packages. Verified file and module/service
+recovery are described in [VM integrations](integration-updates.md#updates-at-launch).
+
+For the existing manual fallback, open
+**Setup > Try Omarchy Integrations** inside Omarchy, and choose
+**Manually install/repair integration support (fallback)**. The integration runs
 `guest/scripts/install-battery-into-existing-guest.sh` from the app's read-only
 integration bundle. It installs eight files (the three DKMS sources under
 `/usr/src/try-omarchy-battery-1.2.0/`, the bridge and its unit, and the udev,

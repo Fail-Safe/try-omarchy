@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -9,6 +10,9 @@ GUEST = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("settings_install", GUEST / "scripts/install-settings-integration.py")
 installer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(installer)
+fix_spec = importlib.util.spec_from_file_location("boot_fixes", GUEST / "scripts/migrate-boot-fixes.py")
+fixes = importlib.util.module_from_spec(fix_spec)
+fix_spec.loader.exec_module(fixes)
 
 
 class SettingsInstallTests(unittest.TestCase):
@@ -17,9 +21,87 @@ class SettingsInstallTests(unittest.TestCase):
         payload.mkdir()
         for name, (relative, _) in installer.FILES.items():
             (payload / name).write_bytes((GUEST / "native-overlay" / relative).read_bytes())
+        for name, relative in fixes.FILES.items():
+            (payload / name).write_bytes((GUEST / "native-overlay" / relative).read_bytes())
         (payload / "omarchy-menu.jsonc").write_bytes(
             (GUEST / "native-overlay/etc/skel" / installer.MENU).read_bytes())
+        (payload / "migrate.py").write_bytes((GUEST / "scripts/migrate-boot-fixes.py").read_bytes())
+        (payload / "try-omarchy-migrate-alacritty").write_bytes(
+            (GUEST / "native-overlay/usr/local/sbin/try-omarchy-migrate-alacritty").read_bytes())
+        spec = importlib.util.spec_from_file_location('extra_fixtures', GUEST / 'scripts/boot-fix-components.py')
+        extras = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(extras)
+        extras.package(GUEST, payload)
+        fixes.bundle_manifest(payload, create=True)
         return payload
+
+    def seed_legacy_native_files(self, root):
+        fixtures = {
+            "omarchy-native-clipboard-bridge": "native-clipboard-before-drain",
+            "omarchy-screensaver": "native-screensaver-before-fit",
+        }
+        for name, fixture in fixtures.items():
+            contents = (GUEST / "tests/fixtures" / fixture).read_bytes()
+            self.assertEqual(fixes.PREVIOUS[name], hashlib.sha256(contents).hexdigest())
+            path = root / fixes.FILES[name]
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(contents)
+            path.chmod(0o755)
+
+    def test_stock_retained_vm_receives_fixes_and_repeat_boot_does_not_rewrite(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "root"
+            payload = self.make_payload(directory)
+            self.seed_legacy_native_files(root)
+            fixes.migrate(payload, root, True, "")
+            inodes = {}
+            for name, relative in fixes.FILES.items():
+                path = root / relative
+                self.assertEqual((payload / name).read_bytes(), path.read_bytes())
+                self.assertEqual(0o755, path.stat().st_mode & 0o777)
+                inodes[name] = path.stat().st_ino
+            fixes.migrate(payload, root, True, "")
+            for name, relative in fixes.FILES.items():
+                self.assertEqual(inodes[name], (root / relative).stat().st_ino)
+
+    def test_custom_scripts_and_absent_integrations_are_preserved(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "root"
+            payload = self.make_payload(directory)
+            fixes.migrate(payload, root, True, "")
+            for relative in fixes.FILES.values():
+                self.assertFalse((root / relative).exists())
+            self.seed_legacy_native_files(root)
+            for name in fixes.PREVIOUS:
+                path = root / fixes.FILES[name]
+                path.write_text("#!/bin/sh\necho my custom behavior\n")
+            fixes.migrate(payload, root, True, "")
+            for name in fixes.PREVIOUS:
+                self.assertIn("my custom behavior", (root / fixes.FILES[name]).read_text())
+            self.assertFalse((root / fixes.FILES["omarchy-native-screensaver-text"]).exists())
+
+    def test_custom_or_symlinked_dependency_prevents_partial_screensaver_update(self):
+        for use_symlink in (False, True):
+            with self.subTest(symlink=use_symlink), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory) / "root"
+                payload = self.make_payload(directory)
+                self.seed_legacy_native_files(root)
+                screensaver = root / fixes.FILES["omarchy-screensaver"]
+                previous = screensaver.read_bytes()
+                helper = root / fixes.FILES["omarchy-native-cursor-restore"]
+                helper.parent.mkdir(parents=True, exist_ok=True)
+                if use_symlink:
+                    target = root / "keep"
+                    target.write_bytes((payload / "omarchy-native-cursor-restore").read_bytes())
+                    helper.symlink_to(target)
+                else:
+                    helper.write_text("my custom cursor behavior")
+                fixes.migrate(payload, root, True, "")
+                self.assertEqual(previous, screensaver.read_bytes())
+                self.assertFalse((root / fixes.FILES["omarchy-native-screensaver-text"]).exists())
+                self.assertEqual(use_symlink, helper.is_symlink())
+                clipboard = root / fixes.FILES["omarchy-native-clipboard-bridge"]
+                self.assertEqual((payload / clipboard.name).read_bytes(), clipboard.read_bytes())
 
     def test_one_branded_search_entry_for_default_and_custom_menus(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -85,12 +167,7 @@ class SettingsInstallTests(unittest.TestCase):
     def test_installs_updates_and_preserves_custom_menu(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "root"
-            payload = Path(directory) / "payload"
-            payload.mkdir()
-            for name, (relative, _) in installer.FILES.items():
-                (payload / name).write_bytes((GUEST / "native-overlay" / relative).read_bytes())
-            (payload / "omarchy-menu.jsonc").write_bytes(
-                (GUEST / "native-overlay/etc/skel" / installer.MENU).read_bytes())
+            payload = self.make_payload(directory)
             installer.install_system(payload, root)
             command = root / "usr/local/bin/omarchy-native-settings"
             original_stat = command.stat()

@@ -8,14 +8,107 @@ automatically by the app at boot, separately from this review workflow. It
 changes the mount policy for that boot without replacing the guest kernel or
 requiring installation of integration support.
 
-## First setup
+## Updates at launch
 
-Open **VM integrations > Review…** in the Mac launcher. Launch Omarchy and paste
-the supplied command into an Omarchy terminal. It mounts the app's dedicated
-read-only 9p share at `/mnt/try-omarchy-updates` and opens a review. The share is
+Compatible repairs have an **Update** action at the bottom of the
+Mac launcher when a check of the selected VM against the current fix bundle
+found unfinished work. A disk with no matching check boots normally and checks
+the fixes without applying them; any needed repairs are offered on the next
+launch. Automatic startup (Skip Launcher) continues normally until a check
+finds work to review. A new or current VM keeps **Launch Omarchy**.
+
+**Update** opens a review of the supported existing-VM repairs listed below. Choose
+**Update and Launch**, **Skip**, or **Cancel**. Skip requires a second
+**Skip and Launch** confirmation and leaves the fixes available for manual retry.
+The review appears automatically only once per disk and fix bundle, including
+after a skip, cancellation, failure, or interrupted update. Later launches keep
+**Launch Omarchy**, and Skip Launcher continues to start normally. Use
+**Review VM fixes…** in Settings while the VM is shut down to explicitly retry;
+that action still requires approval before applying changes. Older failed or
+unconfirmed attempts also stay manual. The existing settings, timezone integration, and shared-folder safety
+payload still run; Skip applies only to the reviewed repairs.
+
+Approval is limited to the reviewed bundle and selected disk's file identity,
+rechecked under the workspace lock. The existing temporary boot service runs
+the repairs before graphical login, without command pasting or a Linux
+password prompt. It does not require an integration agent in the old VM.
+
+Stock integrations are replaced only when their current or reviewed historical
+contents match. Customized files, unsafe paths, unsupported dependencies, and
+explicit service overrides are preserved and reported as skipped. Hold-list
+repair adds only missing compatibility names while preserving existing entries
+and comments; pinch setup appends its scoped device rule without replacing the
+user's other input settings. Existing lock-screen PAM policies are preserved.
+The runner saves a root-private journal before changing any file, verifies the
+entire change set, and restores original bytes, ownership, and permissions if
+an update or service activation fails. Service activity and the loaded battery
+module are restored along with their original files. An interrupted transaction is restored on the next boot,
+even if that launch skips updates. Successful backups remain under
+`/var/lib/try-omarchy/boot-fixes/backup-*.json`. This is recovery for the listed
+file changes and listed service/module activation, not a full-disk snapshot or
+rollback of arbitrary commands. User files have a separate journal under
+`~/.local/state/try-omarchy/boot-fixes`; these steps run as their desktop user.
+Earlier successful components can remain applied when a later user step fails.
+If recovery itself cannot finish, the result explicitly reports that recovery
+needs attention; it never claims the original files were restored.
+
+Successful checks and updates finish without a second dialog; the Mac app
+retains each fix's result in Settings. Failed or unconfirmed approved updates
+still show a warning. No report or no response establishes success.
+Results are scoped to that VM disk and fix bundle; another disk or reset does
+not inherit completion. A missing result triggers a normal boot-time check;
+an unconfirmed approved update leaves a manual retry available in Settings.
+
+### Manual upgrade commands covered by Update
+
+| Previous manual step | Automatic migration |
+| --- | --- |
+| Clipboard/screensaver fixes and Alacritty wrapper retirement | Recognized stock scripts, verified and backed up. |
+| Power panel/menu plugin fixes | Exact reviewed QML and command patches, now included in the journal and result. |
+| `systemctl enable --now systemd-timesyncd` and clock-recovery installer | Install the recovery helper/units and enable time synchronization and the recovery timer. An explicitly disabled existing recovery timer is preserved. |
+| `repair-update-holds.py --apply` | Add compatibility holds to both pacman configurations under the pacman transaction lock; no package operation. |
+| `omarchy-apply-lock` | Seed only the missing pinned password policy; preserve existing PAM and fingerprint policies. |
+| Integration bootstrap/setup command | Install the verified support bundle, menu entry, setup command, and status service automatically. |
+| Ghostty installer from an updated checkout | Update recognized stock Ghostty installer files, verification pins, and the terminal-menu hook; Ghostty is installed later through **Install → Terminal → Ghostty**. |
+| Battery retrofit/update installer | Build privately against the running kernel with existing tools and headers; journal sources, module, DKMS receipts, service enablement, and bridge files before activation. |
+| Existing 1Password integration update | Update recognized installed helpers/unit without enabling a new integration or changing enrollment. |
+| Pinch input snippet and Alacritty `--launcher` cleanup | Run as each desktop user; keep other input settings and remove only the exact stale launcher when Alacritty is absent. |
+
+Battery builds are bounded to three minutes with two compiler jobs. The boot
+service allows five minutes; an approved host check waits up to six minutes
+before reporting an unconfirmed result. Missing DKMS, build tools, matching
+headers, or an unsupported module location produce a skipped battery result;
+no dependency is downloaded or installed. The kernel and paired boot kit stay
+unchanged. The battery source, build receipt, and active DKMS link are published
+with the verified module, so normal DKMS status and future explicit maintenance
+continue to recognize it.
+
+This flow does not install or upgrade packages, replace the kernel, update the
+graphics stack, enable biometrics, or reproduce every factory change. Installing
+new optional applications and first-time 1Password enablement remain explicit
+setup choices. An enrolled older Touch ID protocol requiring enrollment/PAM
+migration is preserved for the guest review below; its password fallback is not
+changed by Update. Customized or unsupported steps are reported, not forced.
+
+## Optional guest review and manual fallback
+
+The normal supported setup is **Update and Launch**, without pasting a command.
+The guest review remains available for opt-in pairing and unsupported/custom
+repairs under **Omarchy Menu > Setup > Try Omarchy Integrations**. The Mac
+launcher uses the launch-time Update action and per-fix results for routine
+updates; it does not show a separate manual-install banner or menu-bar prompt.
+
+If the guest menu entry is missing and the launch-time update cannot install it,
+launch Omarchy and paste this fallback command into an Omarchy terminal:
+
+```sh
+sudo mkdir -p /mnt/try-omarchy-updates && (mountpoint -q /mnt/try-omarchy-updates || sudo mount -t 9p -o trans=virtio,version=9p2000.L,ro tryomarchy-updates /mnt/try-omarchy-updates) && bash /mnt/try-omarchy-updates/setup
+```
+
+It mounts the app's dedicated read-only 9p share and opens a review. The share is
 separate from the optional personal shared folder and needs no SSH connection.
 
-Choose **Install/update integration support** and review replacements before
+Choose **Manually install/repair integration support (fallback)** and review replacements before
 confirming. Installation asks for the Linux user's sudo authorization, retains
 backups, and verifies each component before recording it as complete. Biometric
 enrollment remains a separate action. Existing PAM enrollment is preserved.
@@ -29,9 +122,8 @@ Integrations**, or with `try-omarchy-integrations` in the guest terminal.
 - Mac battery: installs the [host battery](host-battery.md) module and bridge, so
   the Mac's charge appears in the Omarchy bar. The guest builds the module with
   DKMS. VMs with the current integration are left as they are; older installed
-  versions are upgraded by **Install/update integration support**. Rebuilding
-  the Mac app or factory image does not update an existing VM's installed module
-  and bridge.
+  versions are upgraded by the launcher's **Update** flow on their next approved
+  boot. Manual installation remains available for skipped or unsupported repairs.
 
 The bundle contains upstream sudo Touch ID support and the Mac battery mirror.
 Additional integrations can be added after their own upstream review. The manager does not
@@ -51,14 +143,18 @@ Omarchy restarts. The review names the reason, and installation skips the batter
 without failing the other integrations.
 An older, slow, or stopped guest agent cannot be distinguished by silence alone.
 
-When setup, updates, or repairs may be needed, the app offers a review once per
-bundled integration revision for that disk. Choosing Later leaves the VM running
-and keeps the review action available. Checks still run on every launch.
+When setup, updates, or repairs may be needed, an attention icon appears in the
+Mac menu bar with the status and a review action. It disappears after a healthy
+report. The status bridge runs silently and does not show a separate review prompt.
+Checks still run on every launch.
 
-The Mac menu bar provides a live integration status and review action. The
-launcher shows the last check for the selected persistent disk. A report of
-current components means installed files, including the setup command and
-reporting service definition, passed inspection;
+The launcher shows a compact attention notice only when the last check for the
+selected persistent disk needs attention. It stays hidden before the first check,
+while a check is incomplete, and for current integrations. Optional Touch ID
+pairing and an unsupported battery module do not trigger a notice; pairing remains
+available inside Omarchy. New VMs already include the integration manager.
+A report of current components means installed files, including the setup command
+and reporting service definition, passed inspection;
 it does not attest that Touch ID was successfully used. Status messages never
 execute commands or authorize host or guest installation.
 
