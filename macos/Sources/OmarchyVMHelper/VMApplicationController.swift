@@ -160,7 +160,10 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
                 )
             } ?? false,
             optionKeyHeld: NSEvent.modifierFlags.contains(.option),
-            initialArguments: initialArguments
+            initialArguments: initialArguments,
+            requiresVMFixReview: GuestBootFixCache.needsReview(
+                cacheURL: bootFixCacheURL(), expectedIdentity: GuestBootFixCache.bundledIdentity
+            )
         )
         prepareStartMenu(startAutomatically: startAutomatically)
         appReleaseChecker.checkAutomaticallyIfDue()
@@ -379,8 +382,11 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
 
     private func bootFixCacheURL() -> URL? {
         guard !isDisposable else { return nil }
-        return GuestBootFixCache.url(storageRoot: QEMUGPUStorageSpaceEstimate.storageRootURL(
-            environment: baseEnvironment, preference: storageLocationStore.load()))
+        guard let root = QEMUGPUStorageSpaceEstimate.storageRootURL(
+            environment: baseEnvironment, preference: storageLocationStore.load()),
+              let disk = QEMUGPUStorageSpaceEstimate.recordedPersistentDiskURL(
+                stateRoot: root.path, bundleIdentity: bundledMetrics?.identity) else { return nil }
+        return GuestBootFixCache.url(storageRoot: root, diskURL: disk)
     }
 
     private func startVirtualMachine(allowBootRecovery: Bool = false, reviewBootFixes: Bool = false) {
@@ -673,7 +679,7 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
         )
         return ChildLaunchContext(
             environment: VMNetworkPolicy.environment(base: storage.environment, preferences: resolvedNetworkPreferences()),
-            stateRoot: storage.stateRoot,
+            stateRoot: storage.resolvedStateRoot?.path,
             portForwardMappings: forwarding.mappings,
             storageUnavailableReason: storage.unavailableReason
         )
@@ -787,26 +793,18 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
     }
 
     private func receivedBootFixReport(_ report: GuestBootFixReport) {
-        guard report.identity == GuestBootFixCache.bundledIdentity else { return }
+        guard report.identity == GuestBootFixCache.bundledIdentity,
+              let catalog = GuestBootFixCatalog.bundled, report.matchesComponents(in: catalog) else { return }
         // Reports are advisory results, never installation authorization.
         retainBootFixReport(report)
-        guard activeBootFixConsent != nil, !["checking", "running"].contains(report.state), !bootFixResultReceived else { return }
+        guard activeBootFixConsent != nil, !bootFixResultReceived,
+              let result = GuestBootFixResult(report: report, catalog: catalog) else { return }
         bootFixResultTimer?.invalidate()
         bootFixResultTimer = nil
         bootFixResultReceived = true
-        // Successful checks and migrations are retained in Settings without
-        // interrupting startup with a second dialog.
-        guard report.needsAttention else { return }
         activationController.reconcile()
         defer { activationController.reconcile() }
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = report.summary
-        alert.informativeText = report.detail + (report.state == "recovery-required"
-            ? "\n\nOriginal files could not all be restored. Shut down and retry recovery before using these integrations. Backups remain inside the VM."
-            : (report.state == "unconfirmed" ? "\n\nThe VM did not report a result. Completion has not been recorded. Shut down and use Review VM fixes in Settings to retry."
-               : "\n\nYou can review this result in Try Omarchy Settings."))
-        alert.addButton(withTitle: "OK")
+        let alert = GuestBootFixPrompt.result(result)
         isPresentingBlockingAlert = true
         NSApp.activate(ignoringOtherApps: true)
         alert.runModal()
@@ -1210,8 +1208,13 @@ final class VMApplicationController: NSObject, NSApplicationDelegate {
         bootFixResultTimer?.invalidate()
         bootFixResultTimer = nil
         if activeBootFixConsent != nil, !bootFixResultReceived, let identity = GuestBootFixCache.bundledIdentity {
-            retainBootFixReport(GuestBootFixReport(schema: 1, type: "boot-fixes", identity: identity, state: "unconfirmed",
-                components: GuestBootFixReport.pendingComponents))
+            let report = GuestBootFixReport(schema: 1, type: "boot-fixes", identity: identity, state: "unconfirmed",
+                components: GuestBootFixReport.pendingComponents)
+            if virtualMachineReachedStart, !applicationTerminationPending {
+                receivedBootFixReport(report)
+            } else {
+                retainBootFixReport(report)
+            }
         }
         activeBootFixConsent = nil
         activeBootFixCacheURL = nil

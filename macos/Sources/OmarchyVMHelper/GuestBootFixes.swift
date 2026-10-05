@@ -1,9 +1,11 @@
-import AppKit
 import Foundation
 
 struct GuestBootFixReport: Codable, Equatable {
-    static let componentNames = ["clipboard", "screensaver", "alacritty", "power", "clock", "holds",
-                                 "lock", "touch-id", "onepassword", "battery", "integrations", "desktop", "ghostty"]
+    // Frozen compatibility with reports written before the shared catalog.
+    // New components belong only in the catalog and their guest planners.
+    private static let legacyComponentNames = ["clipboard", "screensaver", "alacritty", "power", "clock", "holds",
+                                              "lock", "touch-id", "onepassword", "battery", "integrations", "desktop", "ghostty"]
+    static var componentNames: [String] { GuestBootFixCatalog.bundled?.componentIDs ?? legacyComponentNames }
     static var pendingComponents: [String: String] { Dictionary(uniqueKeysWithValues: componentNames.map { ($0, "pending") }) }
     let schema: Int
     let type: String
@@ -27,19 +29,24 @@ struct GuestBootFixReport: Codable, Equatable {
         ["checking", "running"].contains(state) || needsAttention
     }
 
-    static func decode(_ data: Data) throws -> Self {
+    static func decode(_ data: Data, catalog: GuestBootFixCatalog? = .bundled) throws -> Self {
         guard data.count <= 4096 else { throw HelperError.io("boot fixes report exceeds limit") }
         let value = try JSONDecoder().decode(Self.self, from: data)
         guard value.schema == 1, value.type == "boot-fixes",
+              !value.components.isEmpty,
               value.identity.count == 64,
               value.identity.allSatisfy({ "0123456789abcdef".contains($0) }),
               ["checking", "running", "complete", "skipped", "failed", "recovery-required", "unconfirmed"].contains(value.state),
-              [Set(componentNames), Set(componentNames.filter { $0 != "ghostty" }),
+              [Set(catalog?.componentIDs ?? []), Set(legacyComponentNames), Set(legacyComponentNames.filter { $0 != "ghostty" }),
                Set(["clipboard", "screensaver", "alacritty"])].contains(Set(value.components.keys)),
               value.components.values.allSatisfy({ ["current", "applied", "preserved", "unavailable", "pending", "failed"].contains($0) }),
               value.state != "complete" || !value.components.values.contains(where: { ["pending", "failed"].contains($0) })
         else { throw HelperError.io("invalid boot fixes report") }
         return value
+    }
+
+    func matchesComponents(in catalog: GuestBootFixCatalog) -> Bool {
+        Set(components.keys) == Set(catalog.componentIDs)
     }
 
     var summary: String {
@@ -58,25 +65,70 @@ struct GuestBootFixReport: Codable, Equatable {
         }
     }
 
-    var detail: String {
-        let names = ["clipboard": "Clipboard", "screensaver": "Screensaver", "alacritty": "Alacritty workaround",
-                     "power": "Power/menu plugins", "clock": "Clock recovery", "holds": "Update compatibility holds",
-                     "lock": "Lock-screen password policy", "touch-id": "Touch ID support",
-                     "onepassword": "Existing 1Password integration", "battery": "Mac battery",
-                     "integrations": "Integration setup and status", "desktop": "Pinch input and Apps/menu entries",
-                     "ghostty": "Ghostty terminal installer"]
+    var detail: String { detail(catalog: .bundled) }
+
+    func detail(catalog: GuestBootFixCatalog?) -> String {
+        let names = Dictionary(uniqueKeysWithValues: (catalog?.migrations ?? []).map { ($0.id, $0.title) })
         let labels = ["current": "already current or not needed", "applied": "applied and verified",
                       "preserved": "customized or unsupported files preserved",
                       "unavailable": "skipped · required tools or runtime unavailable", "pending": "pending",
                       "failed": "failed · previous installation kept"]
-        return Self.componentNames.filter { components[$0] != nil }.map {
-            "\(names[$0]!): \(labels[components[$0] ?? "pending"]!)"
+        return components.keys.sorted().map {
+            "\(names[$0] ?? $0): \(labels[components[$0] ?? "pending"]!)"
         }.joined(separator: "\n")
     }
 
     func summary(expectedIdentity: String?) -> String {
         guard let expectedIdentity else { return "VM fix bundle unavailable" }
         return identity == expectedIdentity ? summary : "VM fixes available · last check used an older bundle"
+    }
+}
+
+/// A one-time outcome for an approved update, without the diagnostic report.
+struct GuestBootFixResult {
+    let title: String
+    let message: String
+    let isWarning: Bool
+
+    init?(report: GuestBootFixReport, catalog: GuestBootFixCatalog? = .bundled) {
+        let names = Dictionary(uniqueKeysWithValues: (catalog?.migrations ?? []).map { ($0.id, $0.title) })
+        let skipped = report.components.keys.sorted().filter {
+            ["preserved", "unavailable", "pending", "failed"].contains(report.components[$0] ?? "")
+        }.map { names[$0] ?? $0 }.joined(separator: ", ")
+
+        switch report.state {
+        case "checking", "running": return nil
+        case "complete", "skipped":
+            if skipped.isEmpty {
+                title = "VM update complete"
+                message = "Your VM is ready to use."
+                isWarning = false
+            } else if report.needsUpdate {
+                title = "VM update wasn’t completed"
+                message = "Some fixes are still pending. You can try again from Update and Launch after shutting down Omarchy."
+                isWarning = true
+            } else {
+                title = "Some items couldn’t be updated"
+                message = "Skipped: \(skipped).\n\nCustomized or unsupported items were left unchanged."
+                isWarning = true
+            }
+        case "failed":
+            title = "VM update couldn’t finish"
+            message = "Affected changes were restored. Shut down Omarchy and use Update and Launch to try again."
+            isWarning = true
+        case "recovery-required":
+            title = "VM update needs recovery"
+            message = "Some original files couldn’t be restored. Shut down Omarchy and retry the update before using these integrations. Backups remain in the VM."
+            isWarning = true
+        case "unconfirmed":
+            title = "VM update couldn’t be confirmed"
+            message = "No completion result was received. Shut down Omarchy and use Update and Launch to try again."
+            isWarning = true
+        default:
+            title = "VM update wasn’t completed"
+            message = "Some fixes are still pending. You can try again from Update and Launch after shutting down Omarchy."
+            isWarning = true
+        }
     }
 }
 
@@ -93,10 +145,13 @@ struct GuestBootFixCache: Codable {
         return identity
     }
 
-    static func url(storageRoot: URL?) -> URL? {
-        guard let integrationURL = GuestIntegrationCache.url(storageRoot: storageRoot) else { return nil }
-        return integrationURL.deletingLastPathComponent().appendingPathComponent(
-            integrationURL.lastPathComponent.replacingOccurrences(of: "integration-status-", with: "boot-fixes-"))
+    static func url(storageRoot: URL?, diskURL: URL? = nil) -> URL? {
+        guard let storageRoot,
+              let attributes = try? FileManager.default.attributesOfItem(
+                atPath: (diskURL ?? storageRoot.appendingPathComponent("disks/current/rootfs.ext4")).path),
+              attributes[.type] as? FileAttributeType == .typeRegular,
+              let inode = attributes[.systemFileNumber] as? NSNumber else { return nil }
+        return storageRoot.appendingPathComponent("boot-fixes-\(inode.uint64Value).json")
     }
 
     static func read(_ url: URL?) -> Self? {
@@ -109,20 +164,22 @@ struct GuestBootFixCache: Codable {
     }
 
     static func needsUpdate(cacheURL: URL?, expectedIdentity: String?) -> Bool {
-        // Unknown disks and changed bundles get a check during normal
-        // boot. Only that bundle's actual result can establish work to review.
-        guard let expectedIdentity, let cache = read(cacheURL),
-              cache.report.identity == expectedIdentity else { return false }
+        // Existing disks review a new bundle before their first boot with it.
+        // A matching result can establish that its fixes are already current.
+        guard cacheURL != nil, let expectedIdentity else { return false }
+        guard let cache = read(cacheURL), cache.report.identity == expectedIdentity else { return true }
+        if let catalog = GuestBootFixCatalog.bundled, !cache.report.matchesComponents(in: catalog) { return true }
         return cache.report.needsUpdate
     }
 
     static func needsReview(cacheURL: URL?, expectedIdentity: String?, manuallyRequested: Bool = false) -> Bool {
-        guard let cacheURL, let expectedIdentity, let cache = read(cacheURL),
-              cache.report.identity == expectedIdentity, cache.report.needsUpdate else { return false }
+        guard let cacheURL, let expectedIdentity,
+              needsUpdate(cacheURL: cacheURL, expectedIdentity: expectedIdentity) else { return false }
         // Older failed/interrupted attempts also stay manual. Their marker is
         // retained before a later boot replaces the result with pending work.
         if manuallyRequested { return true }
-        if cache.report.updateWasAttempted { return false }
+        if let cache = read(cacheURL), cache.report.identity == expectedIdentity,
+           cache.report.updateWasAttempted { return false }
         let attributes = try? FileManager.default.attributesOfItem(
             atPath: reviewURL(cacheURL: cacheURL, identity: expectedIdentity).path)
         return attributes?[.type] as? FileAttributeType != .typeRegular
@@ -130,7 +187,8 @@ struct GuestBootFixCache: Codable {
     }
 
     static func recordReview(cacheURL: URL?, identity: String?) throws {
-        guard let cacheURL, let identity, let cache = read(cacheURL), cache.report.identity == identity else { return }
+        guard let cacheURL, let identity, identity.count == 64,
+              identity.allSatisfy({ "0123456789abcdef".contains($0) }) else { return }
         // This is only a reminder acknowledgement, never installation consent.
         try Data().write(to: reviewURL(cacheURL: cacheURL, identity: identity), options: .atomic)
     }
@@ -166,41 +224,5 @@ enum GuestBootFixLaunchGate {
         case .cancel: return .cancel
         case .skip: return confirmSkip() ? .skip : .cancel
         }
-    }
-}
-
-@MainActor
-enum GuestBootFixPrompt {
-    static func review() -> NSAlert {
-        let alert = NSAlert()
-        alert.messageText = "Update VM?"
-        alert.informativeText = """
-            Try Omarchy will verify and try to apply these compatible fixes:
-
-            • Clipboard fixes for large selections.
-            • Screensaver layout and cursor helper fixes.
-            • Remove the old Alacritty software-rendering workaround when supported.
-            • Power/menu plugin fixes, clock recovery, and update compatibility holds.
-            • Missing lock-screen password policy, pinch input, and stale Apps entries.
-            • Fix the Ghostty installer so you can install it from the terminal menu.
-            • Integration setup and Touch ID support, without enabling biometrics.
-            • Existing 1Password support and the Mac battery integration. Battery builds use your current kernel and require matching headers and existing build tools.
-
-            The kernel and customized files are preserved. Your settings and personal files are kept, and updates will rollback or be skipped in case of failure.
-            """
-        alert.addButton(withTitle: "Update and Launch")
-        alert.addButton(withTitle: "Skip and Launch")
-        alert.addButton(withTitle: "Cancel")
-        return alert
-    }
-
-    static func skip() -> NSAlert {
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = "Launch without these VM fixes?"
-        alert.informativeText = "The listed VM fixes and integration updates will not be applied to this disk. Existing issues may remain. You can update on a later launch. Interrupted updates still recover their original files."
-        alert.addButton(withTitle: "Go Back")
-        alert.addButton(withTitle: "Skip and Launch")
-        return alert
     }
 }

@@ -421,8 +421,16 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
 
     func confirmBootFixes() -> GuestBootFixChoice {
         show()
+        guard let catalog = GuestBootFixCatalog.bundled else {
+            let alert = NSAlert()
+            alert.messageText = "VM update details are unavailable"
+            alert.informativeText = "The update catalog is missing or damaged. Reinstall Try Omarchy before updating this VM."
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+            return .cancel
+        }
         return GuestBootFixLaunchGate.decide(review: {
-            switch GuestBootFixPrompt.review().runModal() {
+            switch GuestBootFixPrompt.review(catalog: catalog).runModal() {
             case .alertFirstButtonReturn: return .update
             case .alertSecondButtonReturn: return .skip
             default: return .cancel
@@ -939,13 +947,13 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         manage.isEnabled = !controlsBusy
         let resetAction = virtualMachineRunning && canResetStorage ? manage : reset
 
-        let fixesPending = GuestBootFixCache.needsReview(cacheURL: bootFixCacheURL(), expectedIdentity: bootFixIdentity())
-        let launchButtonTitle = virtualMachineRunning ? "Done" : (launchInProgress ? launchPhase.buttonTitle : (fixesPending ? "Update" : "Launch Omarchy"))
+        let fixesPending = GuestBootFixCache.needsUpdate(cacheURL: bootFixCacheURL(), expectedIdentity: bootFixIdentity())
+        let launchButtonTitle = virtualMachineRunning ? "Done" : (launchInProgress ? launchPhase.buttonTitle : (fixesPending ? "Update and Launch" : "Launch Omarchy"))
         let launchButton = OmarchyActionButton(
             title: launchButtonTitle,
             style: .primary,
             target: self,
-            action: virtualMachineRunning ? #selector(closeSettings) : #selector(launchOmarchy)
+            action: virtualMachineRunning ? #selector(closeSettings) : (fixesPending ? #selector(reviewVMFixes) : #selector(launchOmarchy))
         )
         launchActionButton = launchButton
         launchButton.keyEquivalent = launchInProgress ? "" : "\r"
@@ -1022,28 +1030,7 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         runningActions.alignment = .centerY
         runningActions.spacing = 16
         runningActions.identifier = NSUserInterfaceItemIdentifier("running-settings-actions")
-        var settingsSections: [NSView] = [permissionHeading, permissionCard, integrationHeading, integrationCard]
-        var bootFixNotice: NSView?
-        if let cache = GuestBootFixCache.read(bootFixCacheURL()) {
-            let summary = cache.report.summary(expectedIdentity: bootFixIdentity())
-            let result = NSTextField(wrappingLabelWithString: "Last VM fix check: \(summary)\n\(cache.report.detail)")
-            result.font = .monospacedSystemFont(ofSize: 10, weight: .regular)
-            result.textColor = OmarchyStartMenuTheme.foreground
-            result.identifier = NSUserInterfaceItemIdentifier("boot-fixes-result")
-            bootFixNotice = result
-            settingsSections.insert(result, at: 0)
-            if GuestBootFixCache.needsUpdate(cacheURL: bootFixCacheURL(), expectedIdentity: bootFixIdentity()) {
-                let retry = OmarchyActionButton(title: "Review VM fixes…", style: .secondary,
-                                               target: self, action: #selector(reviewVMFixes))
-                retry.identifier = NSUserInterfaceItemIdentifier("review-boot-fixes-button")
-                retry.isEnabled = !virtualMachineRunning && !controlsBusy
-                retry.toolTip = virtualMachineRunning
-                    ? "Shut down Omarchy to review and retry these fixes"
-                    : "Review the available fixes and choose whether to retry them"
-                retry.heightAnchor.constraint(equalToConstant: 36).isActive = true
-                settingsSections.insert(retry, at: 1)
-            }
-        }
+        let settingsSections: [NSView] = [permissionHeading, permissionCard, integrationHeading, integrationCard]
         let stack = NSStackView(views: virtualMachineRunning
             ? [headingStack, runningActions] + settingsSections + [resetHeading, resetCard]
             : [headingStack] + settingsSections + [resetHeading, resetCard])
@@ -1101,8 +1088,6 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
             resetCard.widthAnchor.constraint(equalTo: stack.widthAnchor),
             launchButton.widthAnchor.constraint(equalTo: actions.widthAnchor),
         ])
-
-        bootFixNotice?.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
         if virtualMachineRunning {
             runningActions.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
