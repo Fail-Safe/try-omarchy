@@ -681,26 +681,30 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
         title.textColor = OmarchyStartMenuTheme.foreground
         title.identifier = NSUserInterfaceItemIdentifier("app-title")
 
-        let subtitle = NSTextField(labelWithString: "OMARCHY  ·  APPLE SILICON")
+        let subtitle = NSTextField(labelWithString: "Omarchy, on Apple Silicon")
         subtitle.font = .monospacedSystemFont(ofSize: 10, weight: .semibold)
         subtitle.textColor = OmarchyStartMenuTheme.accent
 
-        let version = NSTextField(labelWithString: appVersionLabel)
-        version.font = .systemFont(ofSize: 11)
-        version.textColor = OmarchyStartMenuTheme.muted
-        version.lineBreakMode = .byTruncatingMiddle
-        version.toolTip = appVersionLabel
-        version.identifier = NSUserInterfaceItemIdentifier("app-version")
-        version.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        let updates = NSButton(title: appReleaseActionTitle(), target: self, action: #selector(showAppUpdates))
-        updates.isBordered = false
-        updates.font = .systemFont(ofSize: 11)
-        updates.contentTintColor = OmarchyStartMenuTheme.accent
-        updates.identifier = NSUserInterfaceItemIdentifier("app-release-check")
-        appReleaseButton = updates
-        let versionRow = NSStackView(views: [version, updates])
-        versionRow.spacing = 10
-        let titleStack = NSStackView(views: [title, subtitle, versionRow])
+        let titleStack = NSStackView(views: [title, subtitle])
+        appReleaseButton = nil
+        if virtualMachineRunning {
+            let version = NSTextField(labelWithString: appVersionLabel)
+            version.font = .systemFont(ofSize: 11)
+            version.textColor = OmarchyStartMenuTheme.muted
+            version.lineBreakMode = .byTruncatingMiddle
+            version.toolTip = appVersionLabel
+            version.identifier = NSUserInterfaceItemIdentifier("app-version")
+            version.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            let updates = NSButton(title: appReleaseActionTitle(), target: self, action: #selector(showAppUpdates))
+            updates.isBordered = false
+            updates.font = .systemFont(ofSize: 11)
+            updates.contentTintColor = OmarchyStartMenuTheme.accent
+            updates.identifier = NSUserInterfaceItemIdentifier("app-release-check")
+            appReleaseButton = updates
+            let versionRow = NSStackView(views: [version, updates])
+            versionRow.spacing = 10
+            titleStack.addArrangedSubview(versionRow)
+        }
         titleStack.orientation = .vertical
         titleStack.alignment = .leading
         titleStack.spacing = 3
@@ -1081,7 +1085,7 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
             stack.leadingAnchor.constraint(equalTo: document.leadingAnchor, constant: 42),
             stack.trailingAnchor.constraint(equalTo: document.trailingAnchor, constant: -42),
             stack.topAnchor.constraint(equalTo: document.topAnchor, constant: 26),
-            stack.bottomAnchor.constraint(equalTo: document.bottomAnchor),
+            stack.bottomAnchor.constraint(equalTo: document.bottomAnchor, constant: -24),
             headingStack.widthAnchor.constraint(equalTo: stack.widthAnchor),
             permissionCard.widthAnchor.constraint(equalTo: stack.widthAnchor),
             integrationCard.widthAnchor.constraint(equalTo: stack.widthAnchor),
@@ -1095,7 +1099,7 @@ final class StartMenuWindow: NSObject, NSWindowDelegate {
 
         content.layoutSubtreeIfNeeded()
         document.layoutSubtreeIfNeeded()
-        preferredContentHeight = ceil(stack.fittingSize.height + actions.fittingSize.height + 58)
+        preferredContentHeight = ceil(stack.fittingSize.height + actions.fittingSize.height + 82)
         let maximumOffset = max(
             0,
             document.frame.height - scrollView.contentView.bounds.height
