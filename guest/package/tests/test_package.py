@@ -489,6 +489,18 @@ class ScreenRecording(unittest.TestCase):
         self.assertIn('target_install "${optional[@]}"', factory)
 
 
+class VulkanDriver(unittest.TestCase):
+    def test_swrast_is_the_factory_vulkan_icd(self):
+        # Without an ICD, Superwhisper settings and other Vulkan clients fail
+        # with "No GPU adapter found". Venus is the long-term path; lavapipe
+        # is enough for software surfaces in the VirGL guest.
+        recipe = (PACKAGE / "PKGBUILD").read_text()
+        self.assertIn("'vulkan-swrast: Vulkan ICD", recipe)
+        factory = (PACKAGE.parent.parent / "factory/build-image.sh").read_text()
+        self.assertIn("bsdtar -xOf \"$package\" .PKGINFO | sed -n 's/^optdepend = ", factory)
+        self.assertIn('target_install "${optional[@]}"', factory)
+
+
 class Dependencies(unittest.TestCase):
     def test_upgrades_inside_a_vm_need_no_new_downloads(self):
         # The app upgrades this package at boot, possibly offline or with a
