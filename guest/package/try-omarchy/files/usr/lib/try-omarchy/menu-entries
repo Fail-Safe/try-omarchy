@@ -108,8 +108,14 @@ ROWS = (
     ("install.gaming.geforce-now", 5, changed("install.gaming.geforce-now", hide_unless("omarchy-hw-x86"))),
     ("install.gaming.battlenet", 5, changed("install.gaming.battlenet", hide_unless("omarchy-hw-x86"))),
     ("install.gaming.lutris", 5, changed("install.gaming.lutris", hide_unless("omarchy-hw-x86"))),
+    # Bitwarden's desktop app and Omarchy's hermes-desktop package are not on
+    # aarch64; Install then dies with raw "target not found" (#264). Spotify is
+    # already gated with omarchy-hw-x86 upstream. Ollama and T3 Code publish
+    # aarch64 builds on edge now.
+    ("install.service.bitwarden", 8, changed("install.service.bitwarden", hide_unless("omarchy-hw-x86"))),
+    ("install.ai.hermes", 8, changed("install.ai.hermes", hide_unless("omarchy-hw-x86"))),
 )
-RELEASE = 7
+RELEASE = 8
 
 # Rows earlier packages wrote with only the changed field, which Omarchy's
 # merge turned into rows without a label or an action. Still exactly as

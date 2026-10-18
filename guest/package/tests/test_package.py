@@ -225,13 +225,16 @@ class MenuEntries(unittest.TestCase):
   "install.gaming.geforce-now": {"icon":"\U000f08b9","label":"NVIDIA GeForce NOW","disabled":"flatpak info com.nvidia.geforcenow","action":"omarchy-launch-floating-terminal-with-presentation omarchy-install-gaming-geforce-now"},
   "install.gaming.battlenet": {"icon":"","label":"Battle.net","disabled":"[[ -d $HOME/Games/battlenet ]]","action":"omarchy-launch-floating-terminal-with-presentation omarchy-install-gaming-battlenet"},
   "install.gaming.lutris": {"icon":"","label":"Lutris","disabled":"omarchy-pkg-present lutris","action":"omarchy-launch-floating-terminal-with-presentation omarchy-install-gaming-lutris"},
+  "install.service.bitwarden": {"icon":"󰟵","label":"Bitwarden","disabled":"omarchy-pkg-present bitwarden","action":"omarchy-install-and-launch Bitwarden 'bitwarden bitwarden-cli' bitwarden"},
+  "install.ai.hermes": {"icon":"","iconFont":"omarchy","label":"Hermes Desktop","disabled":"omarchy-pkg-present hermes-desktop","action":"omarchy-launch-floating-terminal-with-presentation omarchy-install-ai-hermes"},
 }
 """
     OWN = {"setup.try-omarchy", "setup.security.touch-id", "setup.security.onepassword-touch-id",
            "setup.import-previous-vm"}
     CHANGED = {"update.timezone", "setup.direct-boot", "update.firmware", "update.hardware.wifi",
                "update.hardware.bluetooth", "trigger.appearance.top-bar.indicators.battery-percentage",
-               "install.gaming.geforce-now", "install.gaming.battlenet", "install.gaming.lutris"}
+               "install.gaming.geforce-now", "install.gaming.battlenet", "install.gaming.lutris",
+               "install.service.bitwarden", "install.ai.hermes"}
 
     def setUp(self):
         self.home = Path(tempfile.mkdtemp())
@@ -272,6 +275,8 @@ class MenuEntries(unittest.TestCase):
         self.assertEqual(parsed["update.firmware"]["when"], "! omarchy-hw-vm")
         self.assertEqual(parsed["install.gaming.lutris"]["when"], "omarchy-hw-x86")
         self.assertEqual(parsed["install.gaming.lutris"]["disabled"], "omarchy-pkg-present lutris")
+        self.assertEqual(parsed["install.service.bitwarden"]["when"], "omarchy-hw-x86")
+        self.assertEqual(parsed["install.ai.hermes"]["when"], "omarchy-hw-x86")
         self.assertEqual(parsed["trigger.appearance.top-bar.indicators.battery-percentage"]["when"],
                          "(omarchy-hw-laptop) || compgen -G '/sys/class/power_supply/BAT*' >/dev/null")
         # Removed rows stay removed.
@@ -300,8 +305,9 @@ class MenuEntries(unittest.TestCase):
         parsed = self.parse(self.menu.read_text())
         self.assertEqual(parsed["update.firmware"]["label"], "Firmware")
         self.assertEqual(parsed["update.hardware.wifi"], {"when": "! omarchy-hw-vm", "label": "Mine"})
-        # Nothing re-added; only the newest release's row is new.
-        self.assertEqual(set(parsed), {"update.firmware", "update.hardware.wifi", "setup.import-previous-vm"})
+        # Nothing re-added; only the newest release's rows are new.
+        self.assertEqual(set(parsed), {"update.firmware", "update.hardware.wifi", "setup.import-previous-vm",
+                                       "install.service.bitwarden", "install.ai.hermes"})
 
     def test_without_omarchys_menu_only_own_rows_are_added(self):
         self.omarchy.unlink()
