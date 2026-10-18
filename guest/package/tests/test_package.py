@@ -886,6 +886,13 @@ class Hyprland(unittest.TestCase):
         handler = profile[profile.index('hl.on("window.destroy"'):]
         self.assertIn("invisible = true", handler[:200])
 
+    def test_binds_1password_quick_access(self):
+        # Upstream only opens the full app on Super+Shift+/; the old ARM
+        # installer also bound Ctrl+Shift+Space to Quick Access.
+        profile = (FILES / "usr/share/try-omarchy/hyprland.lua").read_text()
+        self.assertIn('o.bind("CTRL + SHIFT + SPACE", "1Password Quick Access"', profile)
+        self.assertIn('launch = "1password --quick-access"', profile)
+
 
 class AuthenticationState(unittest.TestCase):
     def setUp(self):

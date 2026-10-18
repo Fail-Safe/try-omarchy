@@ -53,3 +53,9 @@ end
 
 pcall(dofile, "/usr/share/try-omarchy/pinch-input.lua")
 pcall(dofile, "/usr/share/try-omarchy/apple-keyboard-input.lua")
+
+-- Upstream only binds Super+Shift+/ to open 1Password. The old ARM installer
+-- also offered Quick Access on Ctrl+Shift+Space.
+if o.cmd_present("1password") then
+  o.bind("CTRL + SHIFT + SPACE", "1Password Quick Access", { launch = "1password --quick-access" })
+end
