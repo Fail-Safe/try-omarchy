@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "tryomarchy.host-bluetooth",
+  "name": "Mac Bluetooth",
+  "version": "1.0.0",
+  "author": "Try Omarchy contributors",
+  "license": "MIT",
+  "description": "Mac Bluetooth paired devices and connection controls",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.bluetooth"
+  },
+  "barWidget": {
+    "displayName": "Mac Bluetooth",
+    "category": "Network",
+    "allowMultiple": false
+  }
+}

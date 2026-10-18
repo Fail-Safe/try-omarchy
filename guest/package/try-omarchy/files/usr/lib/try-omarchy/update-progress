@@ -1,0 +1,198 @@
+#!/usr/bin/python3 -I
+"""Render bounded pre-login integration-update status on the guest console."""
+import argparse
+import fcntl
+import json
+import os
+from pathlib import Path
+import struct
+import subprocess
+import sys
+import termios
+import tempfile
+import time
+
+STATE = '/run/try-omarchy/update-progress.json'
+RESULT = '/var/lib/try-omarchy/package-install.json'
+PHASES = {
+    'integrations': 'Updating Mac integrations...',
+    'drivers': 'Updating device drivers...',
+    'display': 'Preparing display support...',
+    'startup': 'Preparing startup files...',
+}
+
+
+def read(path):
+    try:
+        return json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def write(path, value):
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(mode='w', dir=target.parent, prefix='progress.', delete=False) as stream:
+        json.dump(value, stream)
+        temporary = Path(stream.name)
+    temporary.replace(target)
+
+
+def update(path, values, owner=None, active=False):
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.with_suffix('.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        state = read(path)
+        if owner is not None and state.get('owner') != owner:
+            return
+        if active and state.get('done'):
+            return
+        state.update(values)
+        write(path, state)
+
+
+def alive(pid):
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+
+
+def result_stamp(path):
+    try:
+        return Path(path).stat().st_mtime_ns
+    except OSError:
+        return 0
+
+
+def start(args):
+    state = read(args.state)
+    if state.get('owner') == args.owner and not state.get('done') and state.get('renderer', 0) > 1 and alive(state['renderer']):
+        return
+    write(args.state, {'owner': args.owner, 'requested': args.request, 'phase': args.phase,
+                       'result': None, 'done': False, 'baseline': result_stamp(args.result_file)})
+    child = subprocess.Popen([sys.executable, '-I', str(Path(__file__).resolve()), 'render',
+                              '--state', args.state, '--tty', args.tty, '--result-file', args.result_file],
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, close_fds=True, start_new_session=True)
+    update(args.state, {'renderer': child.pid}, args.owner)
+
+
+def frame(fd, title, detail, symbol):
+    try:
+        rows, columns, _, _ = struct.unpack('HHHH', fcntl.ioctl(fd, termios.TIOCGWINSZ, b'\0' * 8))
+        rows, columns = max(rows or 25, 6), max(columns or 80, 40)
+        lines = [f'{symbol} {title}', detail,
+                 'See details: journalctl -b -u try-omarchy-package-install.service' if symbol == '!' else '']
+        output = '\x1b7'
+        for offset, text in enumerate(lines):
+            clean = ''.join(c if c.isprintable() else ' ' for c in text)[:columns - 2]
+            output += f'\x1b[{rows - 3 + offset};1H\x1b[2K{clean}'
+        os.write(fd, (output + '\x1b8').encode())
+    except (OSError, ValueError):
+        pass
+
+
+def render(args):
+    fd = None
+    owner = read(args.state).get('owner')
+    try:
+        fd = os.open(args.tty, os.O_WRONLY | os.O_NOCTTY | os.O_NONBLOCK)
+        if not os.isatty(fd):
+            return
+        tick = 0
+        deadline = time.monotonic() + 600
+        while time.monotonic() < deadline:
+            state = read(args.state)
+            if state.get('owner') != owner:
+                return
+            result = state.get('result')
+            if not result and result_stamp(args.result_file) != state.get('baseline'):
+                report = read(args.result_file)
+                if report.get('requested') == state.get('requested') and report.get('result') in ('installed', 'current', 'failed'):
+                    result = report['result']
+            if not result and not alive(state.get('owner', 0)):
+                result = 'failed'
+            if result:
+                if result == 'failed':
+                    title, detail, symbol, duration = ('Mac integration update failed',
+                        'Some Mac features may be unavailable. See the update log for details.', '!', 5)
+                else:
+                    title, detail, symbol, duration = ('Mac integrations ready', 'Starting the desktop...', '*', 0.4)
+                end = time.monotonic() + duration
+                while time.monotonic() < end:
+                    frame(fd, title, detail, symbol)
+                    time.sleep(0.15)
+                break
+            frame(fd, PHASES.get(state.get('phase'), PHASES['integrations']),
+                  'This boot may take a little longer. Please keep the VM running.', '|/-\\'[tick % 4])
+            tick += 1
+            time.sleep(0.15)
+        else:
+            frame(fd, 'Mac integration update is taking longer than expected',
+                  'See the update log for details.', '!')
+    finally:
+        if fd is not None:
+            os.close(fd)
+        update(args.state, {'done': True}, owner)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('command', choices=['start', 'phase', 'finish', 'render', 'capture', 'bootstrap'])
+    parser.add_argument('--state', default=STATE)
+    parser.add_argument('--result-file', default=RESULT)
+    parser.add_argument('--tty', default='/dev/tty1')
+    parser.add_argument('--owner', type=int, default=os.getppid())
+    parser.add_argument('--request', default='')
+    parser.add_argument('--phase', choices=PHASES, default='integrations')
+    parser.add_argument('--result', choices=['installed', 'current', 'failed'])
+    args = parser.parse_args()
+    if args.command == 'bootstrap':
+        # The newly unpacked package can display its own first upgrade before
+        # pacman's slow DKMS/initramfs hooks, even with an older boot installer.
+        try:
+            owner = subprocess.run(['systemctl', 'show', 'try-omarchy-package-install.service', '-p', 'MainPID', '--value'],
+                                   capture_output=True, text=True, timeout=2, check=True)
+            args.owner = int(owner.stdout.strip())
+            if args.owner <= 1:
+                return
+            args.request = Path('/run/credentials/try-omarchy-package-install.service/tryomarchy.package').read_text().strip()
+        except (OSError, ValueError, subprocess.SubprocessError):
+            return
+        start(args)
+        update(args.state, {'phase': args.phase}, args.owner, active=True)
+    elif args.command == 'start':
+        if args.owner > 1:
+            start(args)
+    elif args.command == 'render':
+        render(args)
+    elif args.command == 'capture':
+        for line in sys.stdin:
+            print(line, end='', flush=True)
+            lower = line.lower()
+            phase = 'startup' if any(word in lower for word in ('initcpio', 'building uki', 'unified kernel image')) else 'drivers' if 'dkms' in lower else None
+            if phase:
+                state = read(args.state)
+                if state.get('owner') == args.owner and not state.get('done'):
+                    try:
+                        update(args.state, {'phase': phase}, args.owner, active=True)
+                    except OSError:
+                        pass
+    else:
+        state = read(args.state)
+        if state.get('owner') != args.owner or state.get('done'):
+            return
+        if args.command == 'phase':
+            update(args.state, {'phase': args.phase}, args.owner, active=True)
+        else:
+            update(args.state, {'result': args.result}, args.owner)
+            deadline = time.monotonic() + 6
+            while time.monotonic() < deadline and not read(args.state).get('done'):
+                time.sleep(0.1)
+
+
+if __name__ == '__main__':
+    main()

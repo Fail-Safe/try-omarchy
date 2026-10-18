@@ -1,0 +1,44 @@
+#!/usr/bin/python3
+"""Show Mac Bluetooth state or request an allowlisted action from its bridge."""
+import argparse
+import json
+import os
+from pathlib import Path
+import socket
+import sys
+import uuid
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("action", nargs="?", choices=["status", "refresh", "connect", "disconnect", "settings"], default="status")
+    parser.add_argument("device", nargs="?")
+    args = parser.parse_args()
+    directory = Path(os.environ.get("XDG_RUNTIME_DIR", Path.home() / ".cache")) / "try-omarchy-hostnet"
+    try:
+        if args.action == "status":
+            print((directory / "bluetooth.json").read_text().strip())
+            return 0
+        command = {"type": "bluetooth-action", "id": str(uuid.uuid4()), "action": args.action}
+        if args.device:
+            command["device"] = args.device
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+            client.settimeout(17)
+            client.connect(str(directory / "control.sock"))
+            client.sendall(json.dumps(command).encode() + b"\n")
+            data = b""
+            while b"\n" not in data and len(data) <= 4096:
+                chunk = client.recv(4096)
+                if not chunk:
+                    break
+                data += chunk
+            result = json.loads(data)
+        print(json.dumps(result))
+        return 0 if result.get("ok") else 1
+    except (OSError, ValueError) as error:
+        print(json.dumps({"ok": False, "message": "Mac Bluetooth bridge unavailable: " + str(error)}))
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

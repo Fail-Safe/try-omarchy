@@ -6,6 +6,11 @@ import importlib.machinery
 import importlib.util
 import json
 import os
+import pty
+import select
+import shlex
+import sys
+import time
 from pathlib import Path
 import re
 import stat
@@ -430,7 +435,91 @@ class GuestStatus(unittest.TestCase):
         self.assertLess(len(module.report()), 4096)
 
 
+
+class UpdateProgress(unittest.TestCase):
+    def test_console_phases_completion_and_failure(self):
+        for result in ('installed', 'failed'):
+            with self.subTest(result=result), tempfile.TemporaryDirectory() as directory:
+                master, slave = pty.openpty()
+                try:
+                    state = Path(directory) / 'progress.json'
+                    command = [sys.executable, '-I', str(LIB / 'update-progress')]
+                    options = ['--state', str(state), '--result-file', str(Path(directory) / 'result.json'),
+                               '--tty', os.ttyname(slave), '--owner', str(os.getpid())]
+                    subprocess.run(command + ['start', *options, '--request', 'test-package'], check=True)
+                    def frames(seconds):
+                        output = b''
+                        end = time.monotonic() + seconds
+                        while time.monotonic() < end:
+                            if select.select([master], [], [], 0.05)[0]:
+                                output += os.read(master, 65536)
+                        return output
+                    self.assertIn(b'Updating Mac integrations...', frames(0.4))
+                    capture = subprocess.run(command + ['capture', *options], input='DKMS building module\n',
+                                             text=True, capture_output=True, check=True)
+                    self.assertEqual(capture.stdout, 'DKMS building module\n')
+                    self.assertIn(b'Updating device drivers...', frames(0.3))
+                    subprocess.run(command + ['capture', *options], input='mkinitcpio generating image\n',
+                                   text=True, capture_output=True, check=True)
+                    self.assertIn(b'Preparing startup files...', frames(0.3))
+                    finished = subprocess.Popen(command + ['finish', *options, '--result', result])
+                    output = frames(5.6 if result == 'failed' else 0.8)
+                    self.assertEqual(finished.wait(timeout=2), 0)
+                    self.assertTrue(json.loads(state.read_text())['done'])
+                    self.assertIn(b'update failed' if result == 'failed' else b'Mac integrations ready', output)
+                    if result == 'failed':
+                        self.assertIn(b'journalctl -b -u try-omarchy-package-install.service', output)
+                finally:
+                    os.close(master)
+                    os.close(slave)
+
+    def test_unrelated_owner_cannot_finish_an_update(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / 'progress.json'
+            state.write_text(json.dumps({'owner': os.getpid(), 'done': False}))
+            subprocess.run([sys.executable, '-I', str(LIB / 'update-progress'), 'finish',
+                            '--state', str(state), '--owner', '1', '--result', 'failed'], check=True)
+            self.assertNotIn('result', json.loads(state.read_text()))
+
 class PackageInstall(unittest.TestCase):
+    def test_unchanged_boot_is_quiet_and_transaction_failure_is_reported(self):
+        for current in (True, False):
+            with self.subTest(current=current), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                credentials = root / 'credentials'
+                credentials.mkdir()
+                name = 'try-omarchy-0.1.0-34-aarch64.pkg.tar.zst'
+                (credentials / 'tryomarchy.package').write_text(name)
+                (root / 'packages').mkdir()
+                (root / 'packages' / name).touch()
+                (root / 'state').mkdir()
+                source = (LIB / 'package-install').read_text()
+                source = source.replace('/var/lib/try-omarchy', str(root / 'state'))
+                source = source.replace('/run/try-omarchy/packages', str(root / 'packages'))
+                source = source.replace('/usr/lib/try-omarchy/update-progress', str(root / 'progress'))
+                source = source.replace('/usr/lib/try-omarchy/hdr-install', str(root / 'hdr'))
+                (root / 'installer').write_text(source)
+                commands = {
+                    'pacman': 'if [[ $1 == -Q ]]; then echo "try-omarchy 0.1.0-33"; else echo "DKMS transaction fixture failure"; exit 1; fi',
+                    'vercmp': 'echo ' + ('0' if current else '-1'),
+                    'mountpoint': 'exit 0', 'umount': 'exit 0', 'hdr': 'exit 0',
+                    'progress': 'exec ' + shlex.quote(sys.executable) + ' -I ' + shlex.quote(str(LIB / 'update-progress'))
+                                + ' "$@" --state ' + shlex.quote(str(root / 'progress.json')) + ' --tty /dev/null',
+                }
+                for command, body in commands.items():
+                    target = root / command
+                    target.write_text('#!/bin/bash\n' + body + '\n')
+                    target.chmod(0o755)
+                result = run(root / 'installer', env={'PATH': str(root) + os.pathsep + os.environ['PATH'],
+                                                     'CREDENTIALS_DIRECTORY': str(credentials)}, check=False)
+                report = json.loads((root / 'state/package-install.json').read_text())
+                self.assertEqual(result.returncode, 0 if current else 1)
+                self.assertEqual(report['result'], 'current' if current else 'failed')
+                self.assertEqual((root / 'progress.json').exists(), not current)
+                if not current:
+                    self.assertIn('DKMS transaction fixture failure', result.stdout)
+                    self.assertTrue(json.loads((root / 'progress.json').read_text())['done'])
+
     def test_waits_for_omarchys_first_boot_hardware_setup(self):
         # Both run pacman at first boot; a second transaction fails on the lock.
         unit = (FILES / "usr/lib/systemd/system/try-omarchy-package-install.service").read_text()

@@ -568,6 +568,7 @@ authentication_socket="$socket_dir/authentication.sock"
 camera_socket="$socket_dir/camera.sock"
 battery_socket="$socket_dir/battery.sock"
 timezone_socket="$socket_dir/timezone.sock"
+hostnet_socket="$socket_dir/hostnet.sock"
 settings_socket="$socket_dir/settings.sock"
 guest_socket="$socket_dir/guest.sock"
 audio_routes="$socket_dir/audio-routes"
@@ -645,6 +646,8 @@ qemu_args=(
   -device 'virtserialport,bus=omarchy-serial.0,nr=7,chardev=omarchy-battery-bridge,name=dev.tryomarchy.battery'
   -chardev "socket,id=omarchy-timezone-bridge,path=$timezone_socket,server=on,wait=off"
   -device 'virtserialport,bus=omarchy-serial.0,nr=8,chardev=omarchy-timezone-bridge,name=dev.tryomarchy.timezone'
+  -chardev "socket,id=omarchy-hostnet-bridge,path=$hostnet_socket,server=on,wait=off"
+  -device 'virtserialport,bus=omarchy-serial.0,nr=9,chardev=omarchy-hostnet-bridge,name=dev.tryomarchy.hostnet'
 )
 
 if [[ -n $package_to_install ]]; then
@@ -717,8 +720,8 @@ echo "[qemu-gpu] Ready. QMP: $qmp_socket" >&2
 # feature stays unavailable for the rest of the session.
 status_file="$vm_dir/guest-status.json"
 [[ $storage_mode == persistent ]] || status_file="$work_dir/guest-status.json"
-bridge_names=(audio clipboard authentication camera battery timezone guest-status)
-bridge_restarts=(0 0 0 0 0 0 0)
+bridge_names=(audio clipboard authentication camera battery timezone hostnet guest-status)
+bridge_restarts=(0 0 0 0 0 0 0 0)
 start_bridge() { # index
   case ${bridge_names[$1]} in
     audio) "$native_bridge" --bridge-native-audio "$qemu_pid" "$audio_socket" "$audio_routes" 9>&- & ;;
@@ -726,6 +729,7 @@ start_bridge() { # index
     authentication) "$native_bridge" --bridge-native-authentication "$qemu_pid" "$authentication_socket" 9>&- & ;;
     camera) "$native_bridge" --bridge-native-camera "$qemu_pid" "$camera_socket" 9>&- & ;;
     battery) "$native_bridge" --bridge-native-battery "$qemu_pid" "$battery_socket" 9>&- & ;;
+    hostnet) "$native_bridge" --bridge-native-hostnet "$qemu_pid" "$hostnet_socket" "$QEMU_NETWORK_MODE" "$QEMU_NETWORK_INTERFACE" 9>&- & ;;
     timezone) "$native_bridge" --bridge-native-timezone "$qemu_pid" "$timezone_socket" 9>&- & ;;
     guest-status) "$native_bridge" --bridge-guest-status "$qemu_pid" "$guest_socket" "$status_file" 9>&- & ;;
   esac

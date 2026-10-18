@@ -41,6 +41,7 @@ done
 if [[ $installed == "$offered" && -f $state && $(<"$state") == "$signature" && $selected == 1 ]]; then
   exit 0
 fi
+/usr/lib/try-omarchy/update-progress bootstrap --phase display || true
 if [[ $installed != "$offered" ]]; then
   # Never downgrade a newer Omarchy compositor or perform a partial ABI upgrade.
   [[ $installed == 0.56.2-* ]] && (( $(vercmp "$installed" "$offered") < 0 )) || {
@@ -50,6 +51,7 @@ if [[ $installed != "$offered" ]]; then
   pacman -U --noconfirm --needed "${archives[0]}"
 fi
 (cd "$driver" && sha256sum -c SHA256SUMS >/dev/null)
+/usr/lib/try-omarchy/update-progress bootstrap --phase drivers || true
 for kernel in "${kernels[@]}"; do
   # A changed source fingerprint must also rebuild an already registered version.
   dkms build --force -m try-omarchy-virtio-gpu-hdr -v 1.0.0 -k "$kernel"
@@ -58,7 +60,10 @@ for kernel in "${kernels[@]}"; do
   module=$(modinfo -k "$kernel" -n virtio_gpu)
   [[ $module == */updates/dkms/virtio-gpu.ko* ]] || { echo 'HDR: patched module was not selected' >&2; exit 1; }
 done
-if (( ! defer_initramfs )); then mkinitcpio -P; fi
+if (( ! defer_initramfs )); then
+  /usr/lib/try-omarchy/update-progress bootstrap --phase startup || true
+  mkinitcpio -P
+fi
 install -d -m0755 "${state%/*}"
 printf '%s\n' "$signature" > "$state.tmp"
 mv -f "$state.tmp" "$state"

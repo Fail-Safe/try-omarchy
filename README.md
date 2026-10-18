@@ -47,6 +47,9 @@ Shutting down Omarchy closes the app and leaves it closed.
 - Mac audio input/output selection inside Omarchy, with live routing and system-default fallback
 - FaceTime HD and other Mac cameras exposed to Omarchy as an on-demand 720p webcam
 - The Mac's battery charge and charging state mirrored into the Omarchy bar
+- [Mac Wi-Fi](docs/host-wifi.md) signal history and connection details, with NAT and bridge-aware panels
+- [Mac Bluetooth](docs/host-bluetooth.md) paired-device status and connect/disconnect controls
+- Visible startup progress while Mac integration updates prepare drivers and startup files
 - Two-way clipboard sharing for text and PNG images between macOS and Omarchy
 - One optional shared Mac folder, available inside Omarchy under the same name (`~/Work` stays `~/Work`)
 - Loopback-only TCP and UDP port forwarding from the Mac into Omarchy

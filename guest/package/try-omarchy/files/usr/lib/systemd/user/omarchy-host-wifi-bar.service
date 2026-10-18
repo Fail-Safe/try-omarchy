@@ -1,0 +1,16 @@
+[Unit]
+Description=Add Mac Wi-Fi to the Omarchy bar
+PartOf=graphical-session.target
+After=graphical-session.target
+ConditionPathExists=/dev/virtio-ports/dev.tryomarchy.hostnet
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+Environment=OMARCHY_PATH=/usr/share/omarchy
+ExecStart=/usr/bin/omarchy-host-wifi-setup
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

@@ -1,0 +1,100 @@
+#!/usr/bin/python3
+"""Adapt the installed Omarchy network panel through its supported clone API."""
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+
+PLUGIN = "tryomarchy.vm-network"
+SOURCE = Path("/usr/share/omarchy/shell/plugins/panels/network")
+
+
+def adapt(source):
+    replacements = [
+        ('import "Model.js" as Model', 'import "Model.js" as Model\nimport "file:/usr/share/try-omarchy/host-wifi" as HostWifi'),
+        ('  id: root\n', '''  id: root
+  HostWifi.Service { id: hostWifi }
+  readonly property bool bridgedWifi: hostWifi.bridgedWifi
+  readonly property string vmConnection: hostWifi.networkMode === "nat" ? "NAT"
+    : hostWifi.networkMode === "bridged" ? "Bridged via " + (bridgedWifi ? "Mac Wi-Fi" : hostWifi.snapshot.bridgeInterface) : ""
+'''),
+        ('readonly property string icon: Model.connectionIcon(kind, signalStrength, connectivity)', 'readonly property string icon: bridgedWifi ? HostWifi.WifiModel.icon(hostWifi.snapshot) : Model.connectionIcon(kind, signalStrength, connectivity)'),
+        ('if (root.info.type === "ethernet") return Commons.I18n.t("network.ethernet")', 'if (root.info.type === "ethernet") return root.bridgedWifi ? "Wi-Fi" : root.vmConnection === "NAT" ? "VM Network" : "Ethernet"'),
+        ('if (root.info.type === "ethernet") return root.connectionPhrase.toUpperCase()', 'if (root.info.type === "ethernet") return root.vmConnection || root.connectionPhrase.toUpperCase()'),
+        ('InfoLabel { text: Commons.I18n.t("network.ipAddress") }', 'InfoLabel { visible: !root.bridgedWifi; text: "Guest IP" }'),
+        ('text: root.info.ip || "--"', 'visible: !root.bridgedWifi; text: root.info.ip || "--"'),
+        ('      // Connection details: transfer metrics first, then IP/Gateway.', '''      RowLayout {
+        visible: root.bridgedWifi
+        width: parent.width
+        spacing: Style.space(16)
+        InfoLabel { text: "Guest IP" }
+        DetailValue {
+          text: root.info.ip || "--"
+          font.pixelSize: Style.font.title
+          copyable: !!root.info.ip
+          tooltipText: Commons.I18n.t("network.copyIp")
+        }
+      }
+
+      // Connection details: transfer metrics first, then IP/Gateway.'''),
+        ('      // DNS provider selection.', '''      HostWifi.RadioDetails {
+        visible: root.bridgedWifi
+        width: parent.width
+        height: visible ? implicitHeight : 0
+        wifi: hostWifi.snapshot || ({})
+        samples: hostWifi.samples
+        foreground: root.bar.foreground
+        fontFamily: root.bar.fontFamily
+      }
+
+      // DNS provider selection.'''),
+    ]
+    # A changed upstream shape keeps the original panel available rather than
+    # publishing a partial adapter with missing connection controls.
+    for old, new in replacements:
+        if old not in source:
+            raise RuntimeError("Installed Omarchy network panel is incompatible: " + old)
+        source = source.replace(old, new)
+    source = source.replace('HostWifi.WifiModel.icon(hostWifi.snapshot)', 'hostWifi.radioIcon')
+    return source
+
+
+def main():
+    config = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "omarchy"
+    state = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "try-omarchy"
+    destination = state / "vm-network-plugin"
+    target = config / "plugins" / PLUGIN
+    if (target.exists() or target.is_symlink()) and target.resolve() != destination.resolve():
+        raise RuntimeError("VM network plugin path is occupied")
+    panel = adapt((SOURCE / "Panel.qml").read_text())
+    destination.mkdir(parents=True, exist_ok=True)
+    for item in SOURCE.iterdir():
+        if item.is_file() and item.name not in ("Panel.qml", "manifest.json"):
+            shutil.copy2(item, destination / item.name)
+    manifest = json.loads((SOURCE / "manifest.json").read_text())
+    manifest.update(id=PLUGIN, name="VM Network", omarchy={"clonedFrom": "omarchy.network"})
+    (destination / "Panel.qml").write_text(panel)
+    (destination / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if not target.is_symlink():
+        target.symlink_to(destination)
+    subprocess.run(["omarchy-shell", "shell", "rescanPlugins"], check=True, timeout=10)
+    receipt = state / "vm-network-bar-enabled"
+    if not receipt.exists():
+        settings = config / "shell.json"
+        data = json.loads(settings.read_text()) if settings.exists() else {}
+        present = any(isinstance(item, dict) and item.get("id") == "omarchy.network"
+                      for section in data.get("bar", {}).get("layout", {}).values()
+                      if isinstance(section, list) for item in section)
+        if present:
+            backup = state / "shell.json.before-vm-network"
+            if not backup.exists():
+                shutil.copy2(settings, backup)
+                backup.chmod(0o600)
+            subprocess.run(["omarchy", "plugin", "enable", PLUGIN], check=True, timeout=10)
+        receipt.write_text("1\n")
+
+
+if __name__ == "__main__":
+    main()

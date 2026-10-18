@@ -1,0 +1,45 @@
+#!/usr/bin/python3
+"""Register the bundled Wi-Fi widget once, preserving the user's bar layout."""
+import json
+import os
+from pathlib import Path
+import subprocess
+import shutil
+
+PLUGIN = "tryomarchy.host-wifi"
+SOURCE = Path("/usr/share/try-omarchy/host-wifi")
+
+def main():
+    if not Path("/dev/virtio-ports/dev.tryomarchy.hostnet").exists():
+        return 0
+    config = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "omarchy"
+    target = config / "plugins" / PLUGIN
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if not target.exists() and not target.is_symlink():
+        target.symlink_to(SOURCE)
+    if target.resolve() != SOURCE.resolve():
+        raise RuntimeError("Mac Wi-Fi plugin path is already occupied")
+    receipt = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "try-omarchy/host-wifi-bar-enabled"
+    subprocess.run(["/usr/bin/omarchy-vm-network-setup"], check=True, timeout=30)
+    if receipt.exists():
+        return 0
+    # Read the user's latest layout; enablePlugin owns the atomic update.
+    settings = config / "shell.json"
+    data = json.loads(settings.read_text()) if settings.exists() else {}
+    layout = data.get("bar", {}).get("layout", {})
+    present = any(isinstance(item, dict) and item.get("id") == PLUGIN
+                  for section in layout.values() if isinstance(section, list) for item in section)
+    subprocess.run(["omarchy-shell", "shell", "rescanPlugins"], check=True, timeout=10)
+    if not present:
+        receipt.parent.mkdir(parents=True, exist_ok=True)
+        backup = receipt.parent / "shell.json.before-host-wifi"
+        if settings.exists() and not backup.exists():
+            shutil.copy2(settings, backup)
+            backup.chmod(0o600)
+        subprocess.run(["omarchy", "plugin", "enable", PLUGIN, "--section", "right", "--before", "omarchy.network"], check=True, timeout=10)
+    receipt.parent.mkdir(parents=True, exist_ok=True)
+    receipt.write_text("1\n")
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())
