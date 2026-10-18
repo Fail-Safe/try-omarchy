@@ -1,0 +1,102 @@
+#!/usr/bin/python3
+"""Print Mac Wi-Fi status mirrored by omarchy-native-hostnet-bridge.
+
+Default output is a short human line for menus/tooltips. Use --json for the
+raw snapshot and --waybar for a Waybar custom-module JSON object.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import sys
+from typing import Any
+
+
+def state_path() -> Path:
+    runtime = os.environ.get("XDG_RUNTIME_DIR")
+    if runtime:
+        return Path(runtime) / "try-omarchy-hostnet" / "wifi.json"
+    return Path.home() / ".cache" / "try-omarchy-hostnet" / "wifi.json"
+
+
+def load() -> dict[str, Any] | None:
+    path = state_path()
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict) or data.get("type") != "wifi":
+        return None
+    return data
+
+
+def bars(rssi: int | None) -> str:
+    if rssi is None:
+        return "?"
+    # Rough dBm thresholds for a 4-bar glyph.
+    if rssi >= -55:
+        return "▂▄▆█"
+    if rssi >= -65:
+        return "▂▄▆_"
+    if rssi >= -75:
+        return "▂▄__"
+    return "▂___"
+
+
+def human(data: dict[str, Any] | None) -> str:
+    if data is None:
+        return "Mac Wi-Fi: unavailable"
+    if not data.get("powered"):
+        return "Mac Wi-Fi: off"
+    if not data.get("associated"):
+        return "Mac Wi-Fi: on, not connected"
+    ssid = data.get("ssid")
+    if not ssid:
+        ssid = "Connected"
+    rssi = data.get("rssiDbm")
+    suffix = f" {rssi} dBm" if isinstance(rssi, int) else ""
+    return f"Mac Wi-Fi: {ssid} {bars(rssi if isinstance(rssi, int) else None)}{suffix}"
+
+
+def waybar(data: dict[str, Any] | None) -> dict[str, str]:
+    text = human(data)
+    css = "disconnected"
+    if data and data.get("powered") and data.get("associated"):
+        rssi = data.get("rssiDbm")
+        if isinstance(rssi, int) and rssi >= -65:
+            css = "good"
+        elif isinstance(rssi, int):
+            css = "warning"
+        else:
+            css = "good"
+    elif data and data.get("powered"):
+        css = "idle"
+    return {"text": text, "tooltip": text, "class": css}
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(prog="omarchy-host-wifi")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--json", action="store_true")
+    mode.add_argument("--waybar", action="store_true")
+    args = parser.parse_args()
+    data = load()
+    if args.json:
+        json.dump(data if data is not None else {"type": "wifi", "available": False}, sys.stdout)
+        sys.stdout.write("\n")
+        return 0 if data is not None else 1
+    if args.waybar:
+        json.dump(waybar(data), sys.stdout)
+        sys.stdout.write("\n")
+        return 0 if data is not None else 1
+    print(human(data))
+    return 0 if data is not None else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

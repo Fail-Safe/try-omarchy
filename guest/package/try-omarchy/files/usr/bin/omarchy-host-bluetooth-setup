@@ -1,0 +1,44 @@
+#!/usr/bin/python3
+"""Replace the VM's Bluetooth bar entry through Omarchy's plugin clone API."""
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+
+
+def main():
+    if not Path('/dev/virtio-ports/dev.tryomarchy.hostnet').exists():
+        return 0
+    plugin = 'tryomarchy.host-bluetooth'
+    source = Path('/usr/share/try-omarchy/host-bluetooth')
+    config = Path(os.environ.get('XDG_CONFIG_HOME', Path.home()/'.config'))/'omarchy'
+    state = Path(os.environ.get('XDG_STATE_HOME', Path.home()/'.local/state'))/'try-omarchy'
+    target = config/'plugins'/plugin
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if not target.exists() and not target.is_symlink():
+        target.symlink_to(source)
+    if target.resolve() != source.resolve():
+        raise RuntimeError('Mac Bluetooth plugin path is occupied')
+    receipt = state/'host-bluetooth-bar-enabled'
+    if receipt.exists():
+        return 0
+    settings = config/'shell.json'
+    data = json.loads(settings.read_text()) if settings.exists() else {}
+    present = any(isinstance(item, dict) and item.get('id') == 'omarchy.bluetooth'
+                  for section in data.get('bar', {}).get('layout', {}).values()
+                  if isinstance(section, list) for item in section)
+    subprocess.run(['omarchy-shell', 'shell', 'rescanPlugins'], check=True, timeout=10)
+    state.mkdir(parents=True, exist_ok=True)
+    if present:
+        backup = state/'shell.json.before-host-bluetooth'
+        if not backup.exists():
+            shutil.copy2(settings, backup)
+            backup.chmod(0o600)
+        subprocess.run(['omarchy', 'plugin', 'enable', plugin], check=True, timeout=10)
+    receipt.write_text('1\n')
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

@@ -1,0 +1,16 @@
+[Unit]
+Description=Show Mac Bluetooth in the Omarchy bar
+PartOf=graphical-session.target
+After=graphical-session.target
+ConditionPathExists=/dev/virtio-ports/dev.tryomarchy.hostnet
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+Environment=OMARCHY_PATH=/usr/share/omarchy
+ExecStart=/usr/bin/omarchy-host-bluetooth-setup
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "tryomarchy.host-wifi",
+  "name": "Mac Wi-Fi",
+  "version": "1.0.0",
+  "author": "Try Omarchy contributors",
+  "license": "MIT",
+  "description": "Mac Wi-Fi connection details and signal history.",
+  "kinds": ["service", "bar-widget"],
+  "entryPoints": {"service": "Service.qml", "barWidget": "BarWidget.qml"},
+  "barWidget": {"displayName": "Mac Wi-Fi", "category": "Network", "allowMultiple": false, "defaultSection": "right"}
+}

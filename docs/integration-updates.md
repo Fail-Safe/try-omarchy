@@ -84,3 +84,16 @@ root) to the persistent VM as a read-only virtio disk with serial
 `omarchy-previous`, and the package's `try-omarchy-import-previous` copies the
 user's files and lists or installs their packages from it. See the
 [README](../README.md#existing-vm-data).
+
+### Boot-time feedback
+
+When a newer integration package needs installation,
+the guest console shows a spinner and the current stage: integrations, device
+drivers, display support, or startup files. The spinner indicates ongoing work;
+it does not estimate a percentage. Unchanged-package boots stay quiet.
+
+A completed update briefly shows “Mac integrations ready” before login. A failed
+update shows “Mac integration update failed” and a journal command for five
+seconds before normal boot handling continues. Detailed package and DKMS output
+remains available with `journalctl -b -u try-omarchy-package-install.service`.
+The indicator does not change the package transaction or its failure result.

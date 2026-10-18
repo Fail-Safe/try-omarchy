@@ -5,7 +5,7 @@ install running in the Mac app (see [the architecture](../../docs/architecture.m
 
 - the host bridges: clipboard, audio, camera, battery (including the DKMS
   `try-omarchy-battery` module, whose source is in `try-omarchy/battery`),
-  time zone, Touch ID for sudo and 1Password, and the settings port;
+  time zone, Mac Wi-Fi status and its bar panel, paired Mac Bluetooth device controls, Touch ID for sudo and 1Password, and the settings port;
 - the Mac shared folder mount and the home-folder link;
 - the launcher's per-boot settings;
 - first-boot language seeding and the Mac JIS 英数/かな keys;
@@ -70,7 +70,7 @@ not ignore, so caches and other local files never reach the package.
 | credential `tryomarchy.host` | host → guest | Keyboard geometry, locale, time zone, shared folder name, SSH, VirGL flags |
 | credential `tryomarchy.package` + 9p `tryomarchy-packages` | host → guest | The app's bundled package, installed before login when newer |
 | `dev.tryomarchy.guest` | guest → host | Status reports (protocol 1, JSON lines every 10 s) |
-| `dev.tryomarchy.{audio,clipboard,camera,battery,timezone,authentication,settings}` | both | The host bridges, one port per integration |
+| `dev.tryomarchy.{audio,clipboard,camera,battery,timezone,hostnet,authentication,settings}` | both | The host bridges, one port per integration |
 
 A status report looks like this:
 

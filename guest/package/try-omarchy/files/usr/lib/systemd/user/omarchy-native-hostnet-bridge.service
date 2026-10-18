@@ -1,0 +1,16 @@
+[Unit]
+Description=Mirror macOS Wi-Fi status into Omarchy
+PartOf=graphical-session.target
+After=graphical-session.target
+ConditionPathExists=/dev/virtio-ports/dev.tryomarchy.hostnet
+# The agent exits non-zero whenever the host bridge disconnects; keep
+# retrying for as long as the launcher keeps restarting that bridge.
+StartLimitIntervalSec=0
+
+[Service]
+ExecStart=/usr/bin/omarchy-native-hostnet-bridge
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
