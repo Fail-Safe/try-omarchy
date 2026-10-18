@@ -1,8 +1,8 @@
 # Integrated HDR qualification — 2026-10-18
 
 The code tested here is `02396a4`, on the draft HDR branch reconciled with
-upstream v1.0.1 / `0ada4c1`. Later documentation-only commits do not change the
-runtime or guest inputs. The built app uses upstream's ordinary development
+upstream v1.0.1 / `0ada4c1`. The launcher-toggle follow-up below changes host
+preferences/UI only; the runtime and guest inputs remain the same. The built app uses upstream's ordinary development
 identity/version label (0.0.0), not a tagged/notarized release identity.
 
 ## Built artifacts
@@ -121,3 +121,34 @@ every package published afterward. The ordinary freshness report exposes
 those differences. Its version-difference list also includes the intentional
 locally patched Hyprland package versus the repository package. Normal guest
 updates remain available; future graphics versions still need adaptation.
+
+## Launcher HDR toggle follow-up
+
+The normal launcher now has a persisted **HDR display** toggle, off by default.
+Its saved value controls the existing OpenGL HDR launch option and replaces an
+inherited environment value for app launches. Both states retain native
+OpenGL/VirGL. The choice applies at the next VM start; it is not a live mode
+switch. Direct runtime invocations still accept the development environment
+option. Storage, UEFI and previous-VM import code were not changed.
+
+- The complete normal `make build` passed, reusing the qualified factory and
+  runtime inputs and rebuilding/signing the app. All 22 Mach-O compatibility
+  checks passed. The normal rolling-package freshness notice remains visible.
+- `make test` again hit this host toolchain's `TestingMacros` lookup failure.
+  The explicit-plugin command above passed **437 Swift tests in 91 suites**;
+  `make -o test-swift -j4 test-all` passed every remaining group. New tests cover
+  default-off, persistence, malformed/future preference fallback, replacing an
+  inherited HDR value while preserving unrelated launch variables, and clicking
+  On/Off without launching the VM.
+- The rebuilt launcher was inspected on screen. Its HDR label/help fitted the
+  existing layout, On/Off interaction worked, and On survived quitting and
+  reopening the app. This UI check did not start or alter the working VM.
+- A new disposable run with the rebuilt app's own launcher/runtime passed
+  **97 checks, 0 failed, 7 notes in 154 seconds** across fresh provisioning and a second cold
+  boot. Both boots reported **XRGB2101010 / hdredid / reference 100** with the
+  matching compositor and DKMS module, no configuration errors, and unchanged
+  installer idempotence. VirGL reported the Mac GPU. Shutdown, persistence and
+  the second desktop passed. This harness selects HDR through the direct
+  runtime environment; UI preference/launch mapping is tested separately above.
+
+No new physical photometry, other-hardware or live-transition claims are made.

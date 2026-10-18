@@ -3,13 +3,21 @@
 This draft is based on upstream v1.0.1 (`0ada4c1`). It retains upstream's UEFI
 boot, GPT/Btrfs factory, normal VM storage location, integration update offer,
 and read-only previous-VM import flow. No alternate launcher or VM directory
-is required. The normal default remains SDR; HDR is an explicit launch opt-in.
+is required. The normal default remains SDR; enable **HDR display** in the
+launcher to opt in. The choice is saved and applies the next time the VM starts.
+Both settings use the accelerated native OpenGL path. HDR requires a supported
+Mac display and the paired HDR guest integrations described below.
 
 ```sh
 make build
-open -n --env OMARCHY_NATIVE_OPENGL_HDR=1 \
-  -a "$PWD/dist/app.noindex/Try Omarchy.app" --args --run-qemu
+open -n -a "$PWD/dist/app.noindex/Try Omarchy.app"
 ```
+
+The launcher’s saved choice overrides an inherited `OMARCHY_NATIVE_OPENGL_HDR`
+variable, so its displayed state matches the next app launch. Direct
+`run-qemu-gpu.sh` invocations still accept `OMARCHY_NATIVE_OPENGL_HDR=0|1` for
+runtime development and disposable tests. This is a cold-start setting, not a
+live SDR/HDR switch.
 
 Save and shut down any other copy of this app before launching against the same
 storage folder. Use the normal launcher to select another storage location for

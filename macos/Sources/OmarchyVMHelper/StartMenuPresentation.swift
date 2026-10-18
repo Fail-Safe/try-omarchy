@@ -286,4 +286,7 @@ enum StartMenuPresentation {
             : "Omarchy opens in a window with the Mac menu bar and Dock available."
     }
 
+    static let hdrDetail =
+        "Enable HDR on supported Mac displays. Requires HDR guest integrations. Applies next VM start."
+
 }
