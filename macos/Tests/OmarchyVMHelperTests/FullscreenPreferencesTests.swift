@@ -54,6 +54,20 @@ struct FullscreenPreferenceStoreTests {
 
 @Suite("Full Screen launch configuration")
 struct FullscreenLaunchConfigurationTests {
+    @Test("App launches enable fullscreen padding unless explicitly disabled")
+    func cleanViewportPolicy() {
+        let normal = FullscreenLaunchConfiguration.make(
+            baseEnvironment: ["KEEP_ME": "yes"], preferences: .defaults
+        )
+        #expect(normal.environment[FullscreenLaunchConfiguration.cleanViewportEnvironmentKey] == "1")
+        #expect(normal.environment["KEEP_ME"] == "yes")
+        let disabled = FullscreenLaunchConfiguration.make(
+            baseEnvironment: [FullscreenLaunchConfiguration.cleanViewportEnvironmentKey: "0"],
+            preferences: .defaults
+        )
+        #expect(disabled.environment[FullscreenLaunchConfiguration.cleanViewportEnvironmentKey] == "0")
+    }
+
     @Test("Publishes immersive mode and replaces inherited values")
     func publishesChoice() {
         let inherited = [

@@ -41,6 +41,7 @@ struct FullscreenPreferenceStore {
 }
 
 struct FullscreenLaunchConfiguration: Equatable {
+    static let cleanViewportEnvironmentKey = "OMARCHY_COCOA_CLEAN_FULLSCREEN"
     static let immersiveEnvironmentKey = "OMARCHY_QEMU_GPU_IMMERSIVE"
 
     let environment: [String: String]
@@ -52,6 +53,9 @@ struct FullscreenLaunchConfiguration: Equatable {
         var environment = baseEnvironment
         environment.removeValue(forKey: immersiveEnvironmentKey)
         environment[immersiveEnvironmentKey] = preferences.isImmersive ? "1" : "0"
+        if environment[cleanViewportEnvironmentKey] == nil {
+            environment[cleanViewportEnvironmentKey] = "1"
+        }
         return Self(environment: environment)
     }
 }

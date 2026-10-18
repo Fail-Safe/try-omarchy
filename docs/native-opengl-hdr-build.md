@@ -86,3 +86,24 @@ See the [integration qualification record](evidence/native-opengl-hdr-integratio
 for the final factory/app versions, 97-check disposable run, SDR/HDR cold-boot
 controls and the local Swift toolchain test workaround. These results do not
 replace the remaining physical-display and other-hardware gates.
+
+## Fullscreen viewport padding on the hostnet stack
+
+Normal app launches enable `OMARCHY_COCOA_CLEAN_FULLSCREEN=1`. In fullscreen,
+the Cocoa runtime rounds the advertised and rendered height down to a multiple
+of 16 backing pixels, leaving fewer than 16 unused rows instead of stretching
+the guest image into those rows. For a 4112×2582 backing area, the guest-facing
+viewport is 4112×2576. Windowed rendering is unchanged. Cursor placement and
+absolute mouse input use the same padded viewport geometry.
+
+This supplies integral logical heights at 4/3 and 8/5 scale; the selected guest
+mode must still match the advertised viewport. A manually fixed guest mode or
+a different display/window size can still require configuration adjustment.
+Set `OMARCHY_COCOA_CLEAN_FULLSCREEN=0` when launching the app to disable the
+padding for diagnostics. Direct runtime invocations opt in explicitly.
+
+The runtime build pins the original verified VirGL patchset to immutable
+commit `63d8574e05af478cb14215c2401d7033050bb221`. Its commit archive was compared
+against the previously qualified v1.0.42 archive: all 52 source entries matched,
+including modes, links and file contents. This preserves the existing patchset
+after the upstream tag moved, rather than accepting a different renderer input.

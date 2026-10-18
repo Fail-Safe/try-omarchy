@@ -1,0 +1,110 @@
+diff --git a/ui/cocoa.m b/ui/cocoa.m
+--- a/ui/cocoa.m
++++ b/ui/cocoa.m
+@@ -474,6 +474,7 @@
+     CocoaPinch pinch;
+     CocoaScroll scroll;
+ }
++- (CGFloat)cleanBackingHeight:(CGFloat)height;
+ - (void) grabMouse;
+ - (void) ungrabMouse;
+ - (void) setFullGrab:(id)sender;
+@@ -490,6 +491,8 @@
+ - (bool) handlePinchLocked:(NSEvent *)event;
+ @end
+ 
++#include "ui/cocoa-clean-viewport.h"
++
+ QemuCocoaView *cocoaView;
+ static VMChangeStateEntry *pinch_vm_change;
+ 
+@@ -658,7 +661,10 @@
+         CGRect bounds = CGRectZero;
+ 
+         position.x = mouseX * scale;
+-        position.y = (screen.height - mouseY) * scale;
++        NSSize backing = [self convertSizeToBacking:[self bounds].size];
++        CGFloat height = [self cleanBackingHeight:backing.height] /
++                         [[self window] backingScaleFactor];
++        position.y = (screen.height - mouseY) * height / screen.height;
+ 
+         bounds.size.width = cursor->width * scale;
+         bounds.size.height = cursor->height * scale;
+@@ -848,6 +854,14 @@
+     }
+ }
+ 
++- (CGFloat)cleanBackingHeight:(CGFloat)height
++{
++    const char *enabled = getenv("OMARCHY_COCOA_CLEAN_FULLSCREEN");
++    bool fullscreen = ([[self window] styleMask] & NSWindowStyleMaskFullScreen) != 0;
++    return cocoa_clean_viewport_height((uint32_t)height, fullscreen,
++                                       enabled && strcmp(enabled, "1") == 0);
++}
++
+ - (void) updateScale
+ {
+     if (display_opengl) {
+@@ -957,6 +971,9 @@
+                       (uint32_t)backingFrameSize.height / cleanScaleDivisor *
+                           cleanScaleDivisor);
+ 
++    info.height = [self cleanBackingHeight:info.height];
++    fprintf(stderr, "[cocoa-viewport] backing=%.0fx%.0f advertised=%ux%u\n",
++            backingFrameSize.width, backingFrameSize.height, info.width, info.height);
+     qemu_console_set_ui_info(dcl.con, &info, TRUE);
+ }
+ 
+@@ -1517,12 +1534,16 @@
+ 
+     with_bql(^{
+         if (isAbsoluteEnabled) {
+-            CGFloat d = (CGFloat)screen.height / [self frame].size.height;
+-            NSPoint p = [event locationInWindow];
++            NSSize backing = [self convertSizeToBacking:[self bounds].size];
++            CGFloat scale = [[self window] backingScaleFactor];
++            CGFloat height = [self cleanBackingHeight:backing.height] / scale;
++            NSPoint p = [self convertPoint:[event locationInWindow] fromView:nil];
++            CGFloat dx = (CGFloat)screen.width / [self bounds].size.width;
++            CGFloat dy = (CGFloat)screen.height / height;
+ 
+             /* Note that the origin for Cocoa mouse coords is bottom left, not top left. */
+-            qemu_input_queue_abs(dcl.con, INPUT_AXIS_X, p.x * d, 0, screen.width);
+-            qemu_input_queue_abs(dcl.con, INPUT_AXIS_Y, screen.height - p.y * d, 0, screen.height);
++            qemu_input_queue_abs(dcl.con, INPUT_AXIS_X, MAX(0, MIN(screen.width, p.x * dx)), 0, screen.width);
++            qemu_input_queue_abs(dcl.con, INPUT_AXIS_Y, MAX(0, MIN(screen.height, screen.height - p.y * dy)), 0, screen.height);
+         } else {
+             qemu_input_queue_rel(dcl.con, INPUT_AXIS_X, [event deltaX]);
+             qemu_input_queue_rel(dcl.con, INPUT_AXIS_Y, [event deltaY]);
+@@ -2784,7 +2805,14 @@
+         cocoa_gl_log("initial draw FBO=%d", draw_fb);
+     }
+ 
+-    glViewport(0, 0, size.width, size.height);
++    CGFloat viewportHeight = [cocoaView cleanBackingHeight:size.height];
++    if (viewportHeight != size.height) {
++        glDisable(GL_SCISSOR_TEST);
++        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
++        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
++        glClear(GL_COLOR_BUFFER_BIT);
++    }
++    glViewport(0, 0, size.width, viewportHeight);
+     if (cocoa_gl_trace_enabled()) {
+         GLenum err = glGetError();
+         if (err != GL_NO_ERROR) {
+diff --git a/ui/cocoa-clean-viewport.h b/ui/cocoa-clean-viewport.h
+--- /dev/null
++++ b/ui/cocoa-clean-viewport.h
+@@ -0,0 +1,12 @@
++#ifndef COCOA_CLEAN_VIEWPORT_H
++#define COCOA_CLEAN_VIEWPORT_H
++#include <stdbool.h>
++#include <stdint.h>
++
++/* Multiples of 16 give integral logical heights at both 4/3 and 8/5. */
++static inline uint32_t cocoa_clean_viewport_height(uint32_t height,
++                                                  bool fullscreen, bool enabled)
++{
++    return enabled && fullscreen && height >= 608 ? height / 16 * 16 : height;
++}
++#endif

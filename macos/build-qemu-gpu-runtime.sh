@@ -175,10 +175,11 @@ virgl_source_root=virglrenderer-1.3.0
 virgl_archive_name="$virgl_source_root.tar.gz"
 virgl_url="https://gitlab.freedesktop.org/virgl/virglrenderer/-/archive/1.3.0/$virgl_archive_name"
 virgl_sha256=065bc56e89e6f631f96101cd62eba0748e48eb888b434edc86e89d05395e76f3
-virgl_tap_root=homebrew-virglrenderer-1.0.42
+virgl_tap_commit=63d8574e05af478cb14215c2401d7033050bb221
+virgl_tap_root="homebrew-virglrenderer-$virgl_tap_commit"
 virgl_tap_archive_name="$virgl_tap_root.tar.gz"
-virgl_tap_url="https://codeload.github.com/startergo/homebrew-virglrenderer/tar.gz/refs/tags/v1.0.42"
-virgl_tap_sha256=950273fbba46905b6112ee2bd0598c1da706c25319a7347058cbc52f04ba96dd
+virgl_tap_url="https://codeload.github.com/startergo/homebrew-virglrenderer/tar.gz/$virgl_tap_commit"
+virgl_tap_sha256=fb78f1e9386a06467424fb0c24d107615e65e913070bb39decc8b1e6a50029eb
 pyyaml_root=pyyaml-6.0.3
 pyyaml_archive_name="$pyyaml_root.tar.gz"
 pyyaml_url="https://files.pythonhosted.org/packages/05/8e/961c0007c59b8dd7729d542c61a4d537767a59645b82a0b521206e1e25c2/$pyyaml_archive_name"
@@ -546,6 +547,9 @@ verify_file_sha "Native HDR qemu-cocoa-native-hdr.patch" "$native_dir/patches/qe
 patch -d "$source_dir" -p1 -f -i "$native_dir/patches/qemu-cocoa-native-hdr.patch"
 verify_file_sha "Native HDR qemu-cocoa-hdr-reference-white.patch" "$native_dir/patches/qemu-cocoa-hdr-reference-white.patch" "c9e7660200201467f8349a67e6d48bd20374ca003685b1791b7561c2f60f8cc6"
 patch -d "$source_dir" -p1 -f -i "$native_dir/patches/qemu-cocoa-hdr-reference-white.patch"
+
+verify_file_sha "Clean fullscreen viewport patch" "$native_dir/patches/qemu-cocoa-clean-fullscreen.patch" "c5507a6c778b8c95c34aec9bb4496c6841f71209295a50d67156b689cfbfb5af"
+patch -d "$source_dir" -p1 -f -i "$native_dir/patches/qemu-cocoa-clean-fullscreen.patch"
 
 virgl_root="$dependency_root/virglrenderer/$virgl_version"
 angle_root="$dependency_root/angle/$angle_version"
