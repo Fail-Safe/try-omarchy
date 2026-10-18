@@ -33,7 +33,7 @@ pre_remove() {
 
 post_upgrade() {
   /usr/lib/try-omarchy/update-progress bootstrap --phase integrations >/dev/null 2>&1 || true
-  if [ "$(vercmp "$2" 0.1.0-24)" -lt 0 ]; then
+  if [ "$(vercmp "$2" 0.1.0-25)" -lt 0 ]; then
     systemctl --global preset omarchy-host-bluetooth-bar.service >/dev/null 2>&1 || true
   fi
   # Earlier packages started these in every user manager, including SSH and
@@ -50,7 +50,7 @@ post_upgrade() {
   if [ "$(vercmp "$2" 0.1.0-13)" -lt 0 ]; then
     _enable_ntp
   fi
-  if [ "$(vercmp "$2" 0.1.0-24)" -lt 0 ]; then
+  if [ "$(vercmp "$2" 0.1.0-25)" -lt 0 ]; then
     systemctl --global preset omarchy-native-hostnet-bridge.service omarchy-host-wifi-bar.service >/dev/null 2>&1 || true
   fi
   _reload_logind

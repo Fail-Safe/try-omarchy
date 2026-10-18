@@ -11,7 +11,8 @@ Bluetooth snapshots. Bluetooth work has a separate queue so an unavailable
 device cannot stall Wi-Fi heartbeats. The guest writes session-only state to
 `$XDG_RUNTIME_DIR/try-omarchy-hostnet/bluetooth.json` and clears stale state.
 
-The panel shows radio/permission status and paired devices, with connect and
+The panel scrolls within the available screen height and keeps keyboard-selected
+rows visible. It shows radio/permission status and paired devices, with connect and
 disconnect controls, explicit pending/error feedback, and an action to open
 Mac Bluetooth Settings. Apple controls pairing and radio power in that settings
 pane. This does not expose a Linux Bluetooth controller or implement arbitrary

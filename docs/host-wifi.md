@@ -85,6 +85,9 @@ Wi-Fi interface's IPv4 address. The address is taken from that interface, not
 the default route or a VPN. "Link rate" is the radio transmit rate, not measured
 internet throughput. Missing values are shown as `--`.
 
+The panels scroll within the available screen height, including the combined
+bridged Wi-Fi panel. Arrow keys scroll the radio details when needed.
+
 The panel keeps up to two minutes of timestamped five-second signal samples
 while the shell service is running, including when the panel is closed. It
 leaves gaps on disconnect and resets history when the visible connection
@@ -107,7 +110,7 @@ Wi-Fi is included in the `try-omarchy` guest integration package. The Mac app
 exposes hostnet on channel 9 and starts `--bridge-native-hostnet` under its
 normal bridge supervisor on every launch. Timezone sync retains channel 8.
 
-On a guest upgrade to `0.1.0-24`, the package enables the Wi-Fi bridge and bar
+On a guest upgrade to `0.1.0-25`, the package enables the Wi-Fi bridge and bar
 setup units for graphical sessions. Factory installs use the same presets.
 The app offers the bundled integration package through its normal pre-login
 update path; no standalone installer or factory rebuild is needed.

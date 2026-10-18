@@ -12,6 +12,23 @@ SOURCE = Path("/usr/share/omarchy/shell/plugins/panels/network")
 
 def adapt(source):
     replacements = [
+        ('    Column {\n      id: column\n', '''    Flickable {
+      id: radioScroll
+      anchors.fill: parent
+      contentWidth: width
+      contentHeight: column.implicitHeight
+      clip: true
+      boundsBehavior: Flickable.StopAtBounds
+      ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+    Column {
+      id: column
+'''),
+        ('    }\n    }\n  }\n\n  // One Wi-Fi band pill.', '    }\n    }\n    }\n  }\n\n  // One Wi-Fi band pill.'),
+        ('      onMoveRequested: function(dx, dy) {', '''      onMoveRequested: function(dx, dy) {
+        Qt.callLater(function() {
+          if (root.bridgedWifi && root.cursorActive)
+            radioScroll.contentY = root.focusSection === "header" ? 0 : Math.max(0, radioScroll.contentHeight - radioScroll.height)
+        })'''),
         ('import "Model.js" as Model', 'import "Model.js" as Model\nimport "file:/usr/share/try-omarchy/host-wifi" as HostWifi'),
         ('  id: root\n', '''  id: root
   HostWifi.Service { id: hostWifi }

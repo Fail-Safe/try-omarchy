@@ -120,7 +120,7 @@ guest() { ssh "${ssh_options[@]}" root@127.0.0.1 "$@"; }
 
 launch_env=(
   OMARCHY_QEMU_GPU_STATE_ROOT="$state"
-  OMARCHY_QEMU_GPU_FACTORY_CACHE="$HOME/Library/Application Support/Try Omarchy/VM/v1/shell-factory"
+  OMARCHY_QEMU_GPU_FACTORY_CACHE="${OMARCHY_QEMU_GPU_FACTORY_CACHE:-$HOME/Library/Application Support/Try Omarchy/VM/v1/shell-factory}"
   OMARCHY_QEMU_GPU_PORT_FORWARDS="tcp:$port:22"
   OMARCHY_QEMU_GPU_SHARED_FOLDER="$share"
   OMARCHY_QEMU_GPU_IMMERSIVE=0
@@ -255,6 +255,8 @@ guest test -e /var/lib/omarchy/provisioning/pending && miss "first-boot setup is
 hypr() { guest "ls /run/user/$uid/hypr/*/.socket.sock" >/dev/null 2>&1; }
 for _ in $(seq 1 90); do hypr && break; sleep 1; done
 hypr && pass "the desktop starts again on the second boot ($((SECONDS - boot_start)) s)" || miss "no desktop on the second boot"
+log "Mac integrations after the second cold boot"
+guest /ci/vm-checks.sh "$user" "$mac_zone" "$share_token" 2>&1 | record
 guest test ! -e /run/try-omarchy/update-progress.json && pass "unchanged integrations need no update spinner on the second boot" ||
   miss "unchanged integrations unexpectedly started an update spinner"
 guest journalctl -b --no-pager >"$out/journal-2.txt" 2>&1 || true
