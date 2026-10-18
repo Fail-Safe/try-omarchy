@@ -74,6 +74,7 @@ needs a check in a running guest first), **limit** (a design constraint).
 | Notifications show over the screensaver | Old `notification-screen-privacy.patch`; no upstream equivalent | open; upstream (rarely visible now that the VM's idle screensaver is off by default) |
 | US-International (dead keys) layout missing | Old `keyboard-us-acentos.patch` | open; upstream |
 | Project wallpaper gone | Old skel wallpaper (#88) | fixed as an option: Tokyo Night's background switcher offers it beside Omarchy's own; the default background is unchanged |
+| Superwhisper settings cannot save: `No such file or directory` for `~/.local/bin/superwhisper` | Factory installs `superwhisper-bin` from Omarchy's base set, but only `omarchy-install-dictation-superwhisper` runs `/usr/share/superwhisper/setup-user`. Settings execs that user launcher (#376) | fixed: `user-setup` creates the launcher and `~/.local/share/superwhisper/app/current` links when the package is present |
 
 ## Suggested order
 

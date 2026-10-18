@@ -9,6 +9,8 @@ install running in the Mac app (see [the architecture](../../docs/architecture.m
 - the Mac shared folder mount and the home-folder link;
 - the launcher's per-boot settings;
 - first-boot language seeding and the Mac JIS 英数/かな keys;
+- the per-user Superwhisper launcher when the factory already installed the
+  package (Omarchy's install helper is what normally creates it);
 - SSH on demand;
 - `try-omarchy-import-previous`, which copies files and packages from a VM of
   an earlier direct-boot app version that the app attaches read-only;

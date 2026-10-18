@@ -180,7 +180,8 @@ class UserSetup(unittest.TestCase):
         home = Path(tempfile.mkdtemp())
         shipped = FILES / "usr/share/try-omarchy/backgrounds"
         env = {"HOME": str(home), "XDG_STATE_HOME": "", "XDG_CONFIG_HOME": "", "TRY_OMARCHY_MENU_ENTRIES": "/usr/bin/true",
-               "TRY_OMARCHY_IDLE_DEFAULTS": "/usr/bin/true", "TRY_OMARCHY_BACKGROUNDS": str(shipped)}
+               "TRY_OMARCHY_IDLE_DEFAULTS": "/usr/bin/true", "TRY_OMARCHY_BACKGROUNDS": str(shipped),
+               "TRY_OMARCHY_SUPERWHISPER_BIN": "/nonexistent/superwhisper"}
         run(LIB / "user-setup", env=env)
         link = home / ".config/omarchy/backgrounds/tokyo-night/try-omarchy-wallpaper.jpg"
         self.assertTrue(link.is_symlink())
@@ -199,7 +200,8 @@ class UserSetup(unittest.TestCase):
     def test_places_loader_once(self):
         state = Path(tempfile.mkdtemp())
         env = {"XDG_STATE_HOME": str(state), "HOME": str(state), "TRY_OMARCHY_MENU_ENTRIES": "/usr/bin/true",
-               "TRY_OMARCHY_IDLE_DEFAULTS": "/usr/bin/true", "TRY_OMARCHY_BACKGROUNDS": str(state / "none")}
+               "TRY_OMARCHY_IDLE_DEFAULTS": "/usr/bin/true", "TRY_OMARCHY_BACKGROUNDS": str(state / "none"),
+               "TRY_OMARCHY_SUPERWHISPER_BIN": "/nonexistent/superwhisper"}
         run(LIB / "user-setup", env=env)
         loader = state / "omarchy/toggles/hypr/zz-try-omarchy.lua"
         first = loader.read_text()
@@ -210,6 +212,35 @@ class UserSetup(unittest.TestCase):
         loader.write_text("-- edited\n")
         run(LIB / "user-setup", env=env)
         self.assertEqual(loader.read_text(), first)
+
+    def test_links_factory_superwhisper_user_launcher(self):
+        # Settings execs ~/.local/bin/superwhisper; the factory package never
+        # ran setup-user, so that path is missing until login (#376).
+        home = Path(tempfile.mkdtemp())
+        fake_bin = home / "opt/bin/superwhisper"
+        fake_root = home / "opt/superwhisper"
+        fake_bin.parent.mkdir(parents=True)
+        fake_bin.write_text("#!/bin/sh\n")
+        fake_bin.chmod(0o755)
+        fake_root.mkdir()
+        env = {"HOME": str(home), "XDG_STATE_HOME": "", "XDG_CONFIG_HOME": "", "XDG_DATA_HOME": "",
+               "TRY_OMARCHY_MENU_ENTRIES": "/usr/bin/true", "TRY_OMARCHY_IDLE_DEFAULTS": "/usr/bin/true",
+               "TRY_OMARCHY_BACKGROUNDS": str(home / "none"),
+               "TRY_OMARCHY_SUPERWHISPER_BIN": str(fake_bin),
+               "TRY_OMARCHY_SUPERWHISPER_ROOT": str(fake_root)}
+        run(LIB / "user-setup", env=env)
+        launcher = home / ".local/bin/superwhisper"
+        current = home / ".local/share/superwhisper/app/current"
+        self.assertTrue(launcher.is_symlink())
+        self.assertEqual(Path(os.readlink(launcher)), fake_bin)
+        self.assertTrue(current.is_symlink())
+        self.assertEqual(Path(os.readlink(current)), fake_root)
+        # An existing launcher, including a user replacement, is left alone.
+        launcher.unlink()
+        launcher.write_text("custom\n")
+        run(LIB / "user-setup", env=env)
+        self.assertEqual(launcher.read_text(), "custom\n")
+        self.assertFalse(launcher.is_symlink())
 
 
 class MenuEntries(unittest.TestCase):
