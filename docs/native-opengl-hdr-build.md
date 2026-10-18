@@ -71,3 +71,10 @@ integration package cache. Source and build artifacts are distinct from the
 which was collected on the earlier local integration. Exact-branch factory and
 runtime results must be recorded separately; those historical observations do
 not automatically qualify a newly built image.
+
+## Exact-branch qualification
+
+See the [integration qualification record](evidence/native-opengl-hdr-integration.md)
+for the final factory/app versions, 97-check disposable run, SDR/HDR cold-boot
+controls and the local Swift toolchain test workaround. These results do not
+replace the remaining physical-display and other-hardware gates.
