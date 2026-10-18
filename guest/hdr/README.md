@@ -31,3 +31,29 @@ forcing a white level calibrated for a previous presenter. Per-output monitor
 rules take precedence over catch-all rules. Compare the actual monitor policy
 with the reference white received over Wayland, then verify ordinary app whites
 and HDR streams separately. Both are required for a useful HDR desktop.
+
+## Later local brightness corrections
+
+The host now advertises a paired **100-nit encoding reference** in HDR mode.
+The guest monitor SDR maximum and client reference must both use 100 for this
+contract. This supersedes the historical 600-nit local configuration; it does
+not mean the panel can only produce 100 nits.
+
+`../patches/hyprland/hdr-content-peak.patch` targets Hyprland 0.56.2 and uses
+MaxCLL, then mastering peak, for PQ tone-mapping decisions rather than treating
+PQ's 10,000-nit encoding range as the content peak. Missing content metadata
+retains the previous fallback. It was built with the client-white correction
+and deployed locally as 0.56.2-7.322; package pins and factory integration in
+this draft remain unchanged.
+
+`mpv-wayland-opengl-color-description.patch` is an isolated diagnostic-player
+patch against mpv 0.41.0. With `MPV_WAYLAND_OPENGL_COLOR_MANAGEMENT=1`, it lets
+gpu-next/Wayland OpenGL explicitly describe its PQ surface. Stock mpv in this
+test rendered PQ but left its surface unlabelled, so the compositor interpreted
+it as sRGB. This is a review/reproduction input, not a replacement system mpv.
+
+On the tested Vivaldi build, `--enable-features=UseDisplaySDRMaxLuminanceNits`
+prevented an additional 100/203 scaling of PQ video. This was verified with
+HDR10 VP9 profile 2 and ordinary SDR white; HLG and AGTM were not qualified.
+No factory browser flag is installed by this PR. See the
+[brightness measurements](../../docs/evidence/native-opengl-hdr-brightness.md).

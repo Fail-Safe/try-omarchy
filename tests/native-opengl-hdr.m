@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <math.h>
 #include "cocoa-gl-hdr.h"
+#include "cocoa-hdr-reference.h"
 
 static CocoaGLHDRShader shader;
 static CGLContextObj shared_context;
@@ -60,7 +61,7 @@ static void benchmark_final_pass(void)
         double durations[60];
         for(int frame=0;frame<65;frame++) {
             glBeginQuery(GL_TIME_ELAPSED,query);
-            if(mode) cocoa_hdr_shader_draw(&shader,vao,input,true,true,true,105);
+            if(mode) cocoa_hdr_shader_draw(&shader,vao,input,true,true,true,COCOA_HDR_REFERENCE_WHITE_NITS);
             else {
                 glUseProgram(copy);glUniform1i(glGetUniformLocation(copy,"source"),0);
                 glUniform1i(glGetUniformLocation(copy,"flip"),1);
@@ -125,11 +126,11 @@ static void benchmark_final_pass(void)
     printf("Cocoa layer backing: RGB %d/%d/%d bits, component type 0x%x, GL error 0x%x\n",red,green,blue,type,glGetError());
     GLuint vao;
     glGenVertexArrays(1,&vao);
-    cocoa_hdr_shader_draw(&shader,vao,shared_texture,true,true,true,105);
+    cocoa_hdr_shader_draw(&shader,vao,shared_texture,true,true,true,COCOA_HDR_REFERENCE_WHITE_NITS);
     glDeleteVertexArrays(1,&vao);
     float pixel[4]; glReadPixels(0,0,1,1,GL_RGBA,GL_FLOAT,pixel);
     printf("Cocoa layer shared-texture PQ readback: %.4f %.4f %.4f; EDR enabled: %d\n",pixel[0],pixel[1],pixel[2],self.wantsExtendedDynamicRangeContent);
-    layer_passed=red>=16 && green>=16 && blue>=16 && type==GL_FLOAT && fabs(pixel[0]-1000.0f/105)<0.06f;
+    layer_passed=red>=16 && green>=16 && blue>=16 && type==GL_FLOAT && fabs(pixel[0]-1000.0f/COCOA_HDR_REFERENCE_WHITE_NITS)<0.06f;
     layer_finished=true;
     [super drawInCGLContext:context pixelFormat:format forLayerTime:time displayTime:stamp];
 }
@@ -158,32 +159,45 @@ int main(void)
         glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,output,0);
         require(glCheckFramebufferStatus(GL_FRAMEBUFFER)==GL_FRAMEBUFFER_COMPLETE,"float render target");
         glViewport(0,0,2,2);
-        const float nits[]={105,1000,4000};
-        for(int i=0;i<3;i++) {
+        const float nits[]={100,203,600,1000,4000};
+        for(int i=0;i<5;i++) {
             float encoded=pq_encode(nits[i]); float pixel[]={encoded,encoded,encoded,1};
             glBindTexture(GL_TEXTURE_2D,input);
             glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA32F,1,1,0,GL_RGBA,GL_FLOAT,pixel);
-            cocoa_hdr_shader_draw(&shader,vao,input,true,true,true,105);
-            check_pixel(nits[i]/105,"PQ to linear EDR");
+            cocoa_hdr_shader_draw(&shader,vao,input,true,true,true,COCOA_HDR_REFERENCE_WHITE_NITS);
+            check_pixel(nits[i]/COCOA_HDR_REFERENCE_WHITE_NITS,"PQ to linear EDR");
+        }
+        const float paired_references[]={600,COCOA_HDR_REFERENCE_WHITE_NITS};
+        for(int i=0;i<2;i++) {
+            float reference=paired_references[i];
+            float encoded=pq_encode(reference); float pixel[]={encoded,encoded,encoded,1};
+            glBindTexture(GL_TEXTURE_2D,input);
+            glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA32F,1,1,0,GL_RGBA,GL_FLOAT,pixel);
+            cocoa_hdr_shader_draw(&shader,vao,input,true,true,true,reference);
+            check_pixel(1,"paired PQ desktop white remains SDR white");
+            encoded=pq_encode(1000); pixel[0]=pixel[1]=pixel[2]=encoded;
+            glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA32F,1,1,0,GL_RGBA,GL_FLOAT,pixel);
+            cocoa_hdr_shader_draw(&shader,vao,input,true,true,true,reference);
+            check_pixel(1000/reference,"1000-nit highlight with paired reference");
         }
         float white[]={1,1,1,1};
         glBindTexture(GL_TEXTURE_2D,input); glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA32F,1,1,0,GL_RGBA,GL_FLOAT,white);
-        cocoa_hdr_shader_draw(&shader,vao,input,true,false,false,105); check_pixel(1,"SDR white after HDR");
+        cocoa_hdr_shader_draw(&shader,vao,input,true,false,false,COCOA_HDR_REFERENCE_WHITE_NITS); check_pixel(1,"SDR white after HDR");
         float gray[]={0.5,0.5,0.5,1};
         glBindTexture(GL_TEXTURE_2D,input); glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA32F,1,1,0,GL_RGBA,GL_FLOAT,gray);
-        cocoa_hdr_shader_draw(&shader,vao,input,true,false,false,105); check_pixel(0.214041,"SDR gamma");
+        cocoa_hdr_shader_draw(&shader,vao,input,true,false,false,COCOA_HDR_REFERENCE_WHITE_NITS); check_pixel(0.214041,"SDR gamma");
         float red[]={1,0,0,1};
         glBindTexture(GL_TEXTURE_2D,input); glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA32F,1,1,0,GL_RGBA,GL_FLOAT,red);
-        cocoa_hdr_shader_draw(&shader,vao,input,true,false,false,105);
+        cocoa_hdr_shader_draw(&shader,vao,input,true,false,false,COCOA_HDR_REFERENCE_WHITE_NITS);
         float converted[4];glReadPixels(0,0,1,1,GL_RGBA,GL_FLOAT,converted);
         require(fabs(converted[0]-0.627403896)<0.002 && fabs(converted[1]-0.069097289)<0.002 && fabs(converted[2]-0.016391439)<0.002,"sRGB red converts to BT.2020 with correct matrix orientation");
         float pattern[]={0,0,0,1, 0,0,0,1, 1,1,1,1, 1,1,1,1};
         glBindTexture(GL_TEXTURE_2D,input);glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA32F,2,2,0,GL_RGBA,GL_FLOAT,pattern);
-        cocoa_hdr_shader_draw(&shader,vao,input,true,false,false,105);check_pixel(0,"bottom-up texture orientation");
-        cocoa_hdr_shader_draw(&shader,vao,input,false,false,false,105);check_pixel(1,"top-down texture orientation");
+        cocoa_hdr_shader_draw(&shader,vao,input,true,false,false,COCOA_HDR_REFERENCE_WHITE_NITS);check_pixel(0,"bottom-up texture orientation");
+        cocoa_hdr_shader_draw(&shader,vao,input,false,false,false,COCOA_HDR_REFERENCE_WHITE_NITS);check_pixel(1,"top-down texture orientation");
         float pq=pq_encode(1000);float bright[]={pq,pq,pq,1};
         glBindTexture(GL_TEXTURE_2D,input);glTexImage2D(GL_TEXTURE_2D,0,GL_RGB10_A2,1,1,0,GL_RGBA,GL_FLOAT,bright);
-        cocoa_hdr_shader_draw(&shader,vao,input,true,true,true,105);check_pixel(1000.0f/105,"10-bit PQ input");
+        cocoa_hdr_shader_draw(&shader,vao,input,true,true,true,COCOA_HDR_REFERENCE_WHITE_NITS);check_pixel(1000.0f/COCOA_HDR_REFERENCE_WHITE_NITS,"10-bit PQ input");
         shared_context=context.CGLContextObj;shared_texture=input;
         glFlush();
         glDeleteFramebuffers(1,&fbo);glDeleteTextures(1,&output);glDeleteVertexArrays(1,&vao);
@@ -193,6 +207,12 @@ int main(void)
         window.title=@"Try Omarchy OpenGL HDR probe";
         HDRProbeLayer *layer=[HDRProbeLayer layer];
         layer.asynchronous=NO; layer.wantsExtendedDynamicRangeContent=YES;
+        if (@available(macOS 26.0, *)) {
+            layer.preferredDynamicRange=CADynamicRangeHigh;
+            layer.contentsHeadroom=1000.0 / COCOA_HDR_REFERENCE_WHITE_NITS;
+            require([layer.preferredDynamicRange isEqualToString:CADynamicRangeHigh], "full HDR layer policy");
+            require(layer.contentsHeadroom == 10, "declared content headroom matches virtual peak");
+        }
         CGColorSpaceRef colorspace=CGColorSpaceCreateWithName(kCGColorSpaceExtendedLinearITUR_2020);
         layer.colorspace=colorspace;CGColorSpaceRelease(colorspace);
         window.contentView.wantsLayer=YES;window.contentView.layer=layer;

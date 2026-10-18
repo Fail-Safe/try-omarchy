@@ -14,6 +14,11 @@ header = "\n".join(line[1:] for line in block.splitlines()
 with tempfile.TemporaryDirectory(prefix="omarchy-native-hdr-") as temporary:
     directory = pathlib.Path(temporary)
     (directory / "cocoa-gl-hdr.h").write_text(header)
+    reference_patch = (root / "macos/patches/qemu-cocoa-hdr-reference-white.patch").read_text()
+    reference_block = reference_patch.split("diff --git a/ui/cocoa-hdr-reference.h b/ui/cocoa-hdr-reference.h")[1]
+    reference = "\n".join(line[1:] for line in reference_block.splitlines()
+                           if line.startswith("+") and not line.startswith("+++")) + "\n"
+    (directory / "cocoa-hdr-reference.h").write_text(reference)
     executable = directory / "native-hdr-test"
     subprocess.run(["xcrun", "clang", "-std=gnu11", "-fblocks", "-I", str(directory),
                     str(root / "tests/native-opengl-hdr.m"), "-o", str(executable),

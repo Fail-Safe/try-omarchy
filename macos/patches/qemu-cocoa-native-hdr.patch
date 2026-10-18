@@ -234,7 +234,7 @@ diff --git a/ui/cocoa.m b/ui/cocoa.m
 diff --git a/ui/cocoa-gl-hdr.h b/ui/cocoa-gl-hdr.h
 --- /dev/null
 +++ b/ui/cocoa-gl-hdr.h
-@@ -0,0 +1,128 @@
+@@ -0,0 +1,182 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +#ifndef QEMU_COCOA_GL_HDR_H
 +#define QEMU_COCOA_GL_HDR_H
@@ -331,6 +331,59 @@ diff --git a/ui/cocoa-gl-hdr.h b/ui/cocoa-gl-hdr.h
 +    return true;
 +}
 +
++/* Opt-in numeric trace for synthetic patches; never captures an image. */
++static void cocoa_hdr_trace_pixel(GLuint texture, bool pq, bool bt2020,
++                                   float sdr_white)
++{
++    const char *path = getenv("OMARCHY_HDR_PIXEL_TRACE");
++    static unsigned records;
++    static float previous[3] = {-1, -1, -1};
++    static int previous_pq = -1;
++    if (!path || !*path || records >= 4096) return;
++    static time_t last_second;
++    struct timespec now;
++    clock_gettime(CLOCK_MONOTONIC, &now);
++    if (now.tv_sec == last_second) return;
++    last_second = now.tv_sec;
++    GLint read_fb, read_buffer, viewport[4], width, height;
++    GLfloat input[4] = {0}, output[4] = {0};
++    GLuint fb;
++    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read_fb);
++    glGetIntegerv(GL_READ_BUFFER, &read_buffer);
++    glGetIntegerv(GL_VIEWPORT, viewport);
++    GLint draw_fb;
++    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw_fb);
++    glBindFramebuffer(GL_READ_FRAMEBUFFER, draw_fb);
++    glReadBuffer(draw_fb ? GL_COLOR_ATTACHMENT0 : GL_BACK);
++    glReadPixels(viewport[0]+viewport[2]/2, viewport[1]+viewport[3]/2,
++                 1, 1, GL_RGBA, GL_FLOAT, output);
++    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &width);
++    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height);
++    glGenFramebuffers(1, &fb);
++    glBindFramebuffer(GL_READ_FRAMEBUFFER, fb);
++    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
++                           GL_TEXTURE_2D, texture, 0);
++    glReadBuffer(GL_COLOR_ATTACHMENT0);
++    if (glCheckFramebufferStatus(GL_READ_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE)
++        glReadPixels(width/2, height/2, 1, 1, GL_RGBA, GL_FLOAT, input);
++    glBindFramebuffer(GL_READ_FRAMEBUFFER, read_fb);
++    glReadBuffer(read_buffer);
++    glDeleteFramebuffers(1, &fb);
++    if (previous_pq == pq && fabsf(input[0]-previous[0]) < 0.002f &&
++        fabsf(input[1]-previous[1]) < 0.002f &&
++        fabsf(input[2]-previous[2]) < 0.002f) return;
++    memcpy(previous, input, sizeof(previous));
++    previous_pq = pq;
++    FILE *file = fopen(path, "a");
++    if (file) {
++        fprintf(file, "pq=%d bt2020=%d reference=%g input=%.6f,%.6f,%.6f output=%.6f,%.6f,%.6f\n",
++                pq, bt2020, sdr_white, input[0], input[1], input[2],
++                output[0], output[1], output[2]);
++        fclose(file);
++    }
++    records++;
++}
++
 +/* Programs are shared by CGL contexts; vertex-array objects are not. */
 +static void cocoa_hdr_shader_draw(const CocoaGLHDRShader *shader, GLuint vao,
 +                                  GLuint texture, bool flip, bool pq,
@@ -355,6 +408,7 @@ diff --git a/ui/cocoa-gl-hdr.h b/ui/cocoa-gl-hdr.h
 +    glBindVertexArray(vao);
 +    glBindTexture(GL_TEXTURE_2D, texture);
 +    glDrawArrays(GL_TRIANGLES, 0, 3);
++    cocoa_hdr_trace_pixel(texture, pq, bt2020, sdr_white);
 +    glBindTexture(GL_TEXTURE_2D, old_texture);
 +    glActiveTexture(old_active);
 +    glBindVertexArray(old_vao);

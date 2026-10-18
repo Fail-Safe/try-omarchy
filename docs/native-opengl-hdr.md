@@ -95,3 +95,25 @@ sleep/wake testing, other Mac generations/external displays, clipping/tone-map
 policy, physical luminance, and an end-to-end performance comparison. Apple
 OpenGL is deprecated; the private virtio extension and optional private display
 preset query also require maintainer review before this can become a default.
+
+## Current paired brightness contract
+
+The later brightness correction uses a paired **100-nit encoding reference**,
+replacing the historical 600-nit local setup described above. HDR EDID and
+the guest monitor/client SDR-white policy must agree with this reference. The
+OpenGL shader converts a 1,000-nit PQ patch to approximately 10 linear EDR units.
+On macOS 26 the layer also requests high dynamic range and 10x content headroom;
+older supported systems retain the existing EDR opt-in. This remains the
+accelerated Cocoa/OpenGL path.
+
+`OMARCHY_HDR_PIXEL_TRACE=/absolute/path` optionally logs numeric center-pixel
+input/output values and the active color metadata. It performs GPU readbacks
+only when enabled, samples at most once per second, and caps changed records
+at 4,096. Leave it unset during ordinary use/performance testing. It does not
+write images, but the selected numeric pixel can reflect visible content.
+
+The paired guest and diagnostic-player corrections, measured pixel values,
+physical before/after observations and their limits are documented in
+[brightness validation](evidence/native-opengl-hdr-brightness.md). These
+results qualify a separately patched persistent guest; factory integration,
+exact native tone-curve matching and matched browser photometry remain open.
