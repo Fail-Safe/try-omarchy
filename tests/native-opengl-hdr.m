@@ -207,12 +207,14 @@ int main(void)
         window.title=@"Try Omarchy OpenGL HDR probe";
         HDRProbeLayer *layer=[HDRProbeLayer layer];
         layer.asynchronous=NO; layer.wantsExtendedDynamicRangeContent=YES;
+#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 260000
         if (@available(macOS 26.0, *)) {
             layer.preferredDynamicRange=CADynamicRangeHigh;
             layer.contentsHeadroom=1000.0 / COCOA_HDR_REFERENCE_WHITE_NITS;
             require([layer.preferredDynamicRange isEqualToString:CADynamicRangeHigh], "full HDR layer policy");
             require(layer.contentsHeadroom == 10, "declared content headroom matches virtual peak");
         }
+#endif
         CGColorSpaceRef colorspace=CGColorSpaceCreateWithName(kCGColorSpaceExtendedLinearITUR_2020);
         layer.colorspace=colorspace;CGColorSpaceRelease(colorspace);
         window.contentView.wantsLayer=YES;window.contentView.layer=layer;

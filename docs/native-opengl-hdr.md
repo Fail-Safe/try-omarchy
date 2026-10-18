@@ -1,3 +1,6 @@
+> Current build integration: see [the normal build and update flow](native-opengl-hdr-build.md).
+> Earlier qualification sections below are historical evidence, not the current factory contract.
+
 # Native OpenGL HDR prototype
 
 This opt-in review prototype extends upstream commit `61d86ed1e691de44f3e50fdef4c78500abcfbf57`.

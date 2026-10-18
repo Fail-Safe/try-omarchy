@@ -109,6 +109,8 @@ test-contracts:
 	@$(ROOT)/macos/Tests/runtime-relocation.test.sh
 
 test-guest:
+	@PYTHONDONTWRITEBYTECODE=1 python3 "$(ROOT)/guest/package/tests/test_hdr_integration.py"
+	@PYTHONDONTWRITEBYTECODE=1 python3 "$(ROOT)/guest/package/tests/test_hdr_policy.py"
 	@PYTHONDONTWRITEBYTECODE=1 python3 "$(ROOT)/guest/package/tests/test_package.py"
 
 # The package's contracts with the Omarchy the factory installs today.

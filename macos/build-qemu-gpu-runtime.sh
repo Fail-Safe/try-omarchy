@@ -544,7 +544,7 @@ verify_file_sha "Native HDR qemu-cocoa-sdr-white.patch" "$native_dir/patches/qem
 patch -d "$source_dir" -p1 -f -i "$native_dir/patches/qemu-cocoa-sdr-white.patch"
 verify_file_sha "Native HDR qemu-cocoa-native-hdr.patch" "$native_dir/patches/qemu-cocoa-native-hdr.patch" "23d8707c8374cef086d18a014f9b97861a0f197cf2b5f2a9fb42349ff978ec94"
 patch -d "$source_dir" -p1 -f -i "$native_dir/patches/qemu-cocoa-native-hdr.patch"
-verify_file_sha "Native HDR qemu-cocoa-hdr-reference-white.patch" "$native_dir/patches/qemu-cocoa-hdr-reference-white.patch" "387da99bcc9cad393de9b99cadfb1b4cfbb7a43b846eae913731e0264437c4c1"
+verify_file_sha "Native HDR qemu-cocoa-hdr-reference-white.patch" "$native_dir/patches/qemu-cocoa-hdr-reference-white.patch" "c9e7660200201467f8349a67e6d48bd20374ca003685b1791b7561c2f60f8cc6"
 patch -d "$source_dir" -p1 -f -i "$native_dir/patches/qemu-cocoa-hdr-reference-white.patch"
 
 virgl_root="$dependency_root/virglrenderer/$virgl_version"
