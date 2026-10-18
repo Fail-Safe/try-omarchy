@@ -152,3 +152,29 @@ option. Storage, UEFI and previous-VM import code were not changed.
   runtime environment; UI preference/launch mapping is tested separately above.
 
 No new physical photometry, other-hardware or live-transition claims are made.
+
+## Linux checksum-output correction
+
+The first hosted Linux package/desktop jobs compiled the HDR compositor but
+failed at the host-side manifest write with `SHA256SUMS: Permission denied`.
+The container had created that file as root; the unprivileged runner could not
+overwrite it. This was an output-ownership failure, not a recorded checksum
+mismatch or a recorded missing-command error.
+
+The container now exports only its package. The host writes the complete
+manifest once, including `version`. Host generation and cache verification
+prefer coreutils `sha256sum`, falling back to `shasum -a 256` on macOS.
+
+- An ARM64 Linux reproduction executed the old/new output stages with a
+  synthetic archive, then ran the manifest writer as an unprivileged UID. The
+  old stage reproduced the permission error. The new stage produced a
+  host-owned manifest; real `sha256sum -c` verified both entries while the
+  archive remained root-owned.
+- Four build-contract tests exercise isolated checksum-tool paths, complete
+  manifest contents, valid cache reuse, and corrupted-cache rebuilding. These
+  use a synthetic package/Docker fixture, rather than claiming a compositor
+  compilation. The actual companion cache/output path also passed locally.
+- All 437 Swift tests passed with the documented toolchain workaround, and
+  every remaining repository test group passed. `bash -n` and
+  `git diff --check` passed. Hosted build/install/desktop results are tracked
+  on the PR separately; local reproduction alone does not qualify those jobs.

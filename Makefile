@@ -109,6 +109,7 @@ test-contracts:
 	@$(ROOT)/macos/Tests/runtime-relocation.test.sh
 
 test-guest:
+	@PYTHONDONTWRITEBYTECODE=1 python3 "$(ROOT)/guest/package/tests/test_hdr_build.py"
 	@PYTHONDONTWRITEBYTECODE=1 python3 "$(ROOT)/guest/package/tests/test_hdr_integration.py"
 	@PYTHONDONTWRITEBYTECODE=1 python3 "$(ROOT)/guest/package/tests/test_hdr_policy.py"
 	@PYTHONDONTWRITEBYTECODE=1 python3 "$(ROOT)/guest/package/tests/test_package.py"
