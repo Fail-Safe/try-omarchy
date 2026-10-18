@@ -20,7 +20,13 @@ done
 [[ -n $signature ]] || fail 'no owner compositor socket'
 monitor=$(runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" HYPRLAND_INSTANCE_SIGNATURE="$signature" hyprctl -j monitors)
 printf '%s\n' "$monitor" > /ci-run/hdr-monitors.json
-jq -e 'length > 0 and all(.[]; .currentFormat == "XRGB2101010" and .colorManagementPreset == "hdredid" and .sdrMaxLuminance == 100)' <<< "$monitor" >/dev/null || fail 'output is not ten-bit PQ with the paired reference'
+if ! jq -e 'length > 0 and all(.[]; .currentFormat == "XRGB2101010" and .colorManagementPreset == "hdredid" and .sdrMaxLuminance == 100)' <<< "$monitor" >/dev/null; then
+  jq -c '[.[] | {name,currentFormat,colorManagementPreset,sdrMaxLuminance}]' <<< "$monitor"
+  for edid in /sys/class/drm/card*-Virtual-*/edid; do
+    /usr/lib/try-omarchy/hdr-monitor-policy "$edid"
+  done
+  fail 'output is not ten-bit PQ with the paired reference'
+fi
 ok "output: $(jq -c '[.[] | {name,width,height,refreshRate,scale,currentFormat,colorManagementPreset,sdrMaxLuminance}]' <<< "$monitor")"
 errors=$(runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" HYPRLAND_INSTANCE_SIGNATURE="$signature" hyprctl configerrors)
 [[ -z $errors || $errors == 'ok' ]] || fail "compositor configuration errors: $errors"
