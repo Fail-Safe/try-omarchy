@@ -41,7 +41,8 @@ use **Import Previous VM** exactly as in upstream.
   transaction, deferring initramfs generation to upstream’s final UKI step. Existing UEFI guests get it through the existing **Update
   integrations** offer and pre-login service. Restart after the first driver
   installation: an already loaded stock driver is not hot-unloaded.
-- EDID supplies mode/refresh/SDR-white policy. PQ output selects ten-bit
+- EDID supplies mode/refresh/SDR-white policy, including the paired 100-nit
+  fallback before the host window has supplied UI information. PQ output selects ten-bit
   `hdredid` and the host's paired 100-nit reference; SDR selects eight-bit sRGB.
   Explicit per-output user monitor rules still win. No user's monitor file,
   app profile, theme or imported home configuration is replaced.

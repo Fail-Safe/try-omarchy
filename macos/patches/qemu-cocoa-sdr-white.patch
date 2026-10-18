@@ -21,13 +21,14 @@ diff --git a/hw/display/edid-generate.c b/hw/display/edid-generate.c
 diff --git a/hw/display/virtio-gpu-base.c b/hw/display/virtio-gpu-base.c
 --- a/hw/display/virtio-gpu-base.c
 +++ b/hw/display/virtio-gpu-base.c
-@@ -81,6 +81,10 @@
+@@ -81,6 +81,11 @@
      if (info.hdr && !info.name) {
          info.name = "Omarchy HDR";
      }
 +    if (info.hdr) {
 +        const QemuUIInfo *ui = qemu_console_get_ui_info(g->scanout[scanout].con);
-+        info.sdr_white_nits = ui ? ui->sdr_white_nits : 0;
++        /* The paired HDR encoding reference must exist before Cocoa is ready. */
++        info.sdr_white_nits = ui && ui->sdr_white_nits ? ui->sdr_white_nits : 100;
 +    }
      edid->size = cpu_to_le32(sizeof(edid->edid));
      qemu_edid_generate(edid->edid, sizeof(edid->edid), &info);

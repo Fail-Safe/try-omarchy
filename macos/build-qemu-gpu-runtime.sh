@@ -540,7 +540,7 @@ patch -d "$source_dir" -p1 -f -i "$main_loop_qos_patch"
 
 verify_file_sha "Native HDR qemu-hdr-protocol.patch" "$native_dir/patches/qemu-hdr-protocol.patch" "2a99ed9c418d1d9f9151507c326696da96cb4a50edb565d0caa6f4b3a1877b07"
 patch -d "$source_dir" -p1 -f -i "$native_dir/patches/qemu-hdr-protocol.patch"
-verify_file_sha "Native HDR qemu-cocoa-sdr-white.patch" "$native_dir/patches/qemu-cocoa-sdr-white.patch" "d0246389c826698db014ed9da6687fedc81012dfe4542f783a6c85611ea49eb2"
+verify_file_sha "Native HDR qemu-cocoa-sdr-white.patch" "$native_dir/patches/qemu-cocoa-sdr-white.patch" "02e6b16284a9a7f36077788405d59f16979e83f533b8463252cd9506b508cdb2"
 patch -d "$source_dir" -p1 -f -i "$native_dir/patches/qemu-cocoa-sdr-white.patch"
 verify_file_sha "Native HDR qemu-cocoa-native-hdr.patch" "$native_dir/patches/qemu-cocoa-native-hdr.patch" "23d8707c8374cef086d18a014f9b97861a0f197cf2b5f2a9fb42349ff978ec94"
 patch -d "$source_dir" -p1 -f -i "$native_dir/patches/qemu-cocoa-native-hdr.patch"
