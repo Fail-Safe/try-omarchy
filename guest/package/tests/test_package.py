@@ -454,22 +454,33 @@ class UpdateProgress(unittest.TestCase):
                             if select.select([master], [], [], 0.05)[0]:
                                 output += os.read(master, 65536)
                         return output
-                    self.assertIn(b'Updating Mac integrations...', frames(0.4))
+                    def expect_frame(expected):
+                        output = b''
+                        deadline = time.monotonic() + 5
+                        while expected not in output and time.monotonic() < deadline:
+                            output += frames(0.1)
+                        self.assertIn(expected, output)
+                    expect_frame(b'Updating Mac integrations...')
                     capture = subprocess.run(command + ['capture', *options], input='DKMS building module\n',
                                              text=True, capture_output=True, check=True)
                     self.assertEqual(capture.stdout, 'DKMS building module\n')
-                    self.assertIn(b'Updating device drivers...', frames(0.3))
+                    expect_frame(b'Updating device drivers...')
                     subprocess.run(command + ['capture', *options], input='mkinitcpio generating image\n',
                                    text=True, capture_output=True, check=True)
-                    self.assertIn(b'Preparing startup files...', frames(0.3))
+                    expect_frame(b'Preparing startup files...')
                     finished = subprocess.Popen(command + ['finish', *options, '--result', result])
-                    output = frames(5.6 if result == 'failed' else 0.8)
+                    output = b''
+                    deadline = time.monotonic() + 10
+                    while finished.poll() is None and time.monotonic() < deadline:
+                        output += frames(0.1)
                     self.assertEqual(finished.wait(timeout=2), 0)
                     self.assertTrue(json.loads(state.read_text())['done'])
                     self.assertIn(b'update failed' if result == 'failed' else b'Mac integrations ready', output)
                     if result == 'failed':
                         self.assertIn(b'journalctl -b -u try-omarchy-package-install.service', output)
                 finally:
+                    subprocess.run(command + ['finish', *options, '--result', 'installed'],
+                                   check=True, timeout=8)
                     os.close(master)
                     os.close(slave)
 

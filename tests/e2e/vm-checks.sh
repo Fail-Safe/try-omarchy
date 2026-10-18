@@ -19,7 +19,7 @@ uid=$(id -u "$user")
 as_user() { runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" "$@"; }
 
 # --- the Mac's ports ---------------------------------------------------------------------
-for port in audio clipboard camera battery timezone settings authentication guest; do
+for port in audio clipboard camera battery timezone settings authentication guest hostnet; do
   [[ -e /dev/virtio-ports/dev.tryomarchy.$port ]] && ok "port dev.tryomarchy.$port" || bad "no port dev.tryomarchy.$port"
 done
 [[ -s /run/try-omarchy/cmdline ]] && ok "host settings credential published: $(tr '\n' ' ' </run/try-omarchy/cmdline | cut -c1-120)" ||
@@ -28,11 +28,49 @@ done
 for unit in try-omarchy-timezone.service try-omarchy-guest-status.service omarchy-native-battery-bridge.service; do
   [[ $(systemctl is-active "$unit") == active ]] && ok "$unit is active" || bad "$unit is $(systemctl is-active "$unit")"
 done
-for unit in omarchy-native-audio-bridge.service omarchy-native-camera-bridge.service omarchy-native-clipboard-bridge.service; do
+for unit in omarchy-native-audio-bridge.service omarchy-native-camera-bridge.service omarchy-native-clipboard-bridge.service omarchy-native-hostnet-bridge.service; do
   active=$(as_user systemctl --user show "$unit" -p ActiveState | sed 's/^ActiveState=//')
   restarts=$(as_user systemctl --user show "$unit" -p NRestarts | sed 's/^NRestarts=//')
   if [[ $active == active && ${restarts:-0} == 0 ]]; then ok "$unit is active"; else bad "$unit: $active, $restarts restarts"; fi
 done
+
+# The actual host bridge must publish fresh snapshots, not just start a unit.
+for integration in wifi bluetooth; do
+  snapshot="/run/user/$uid/try-omarchy-hostnet/$integration.json"
+  for _ in $(seq 1 15); do [[ -s $snapshot ]] && break; sleep 1; done
+  if python3 -I - "$snapshot" "$integration" <<'PYTHON'
+import json, pathlib, sys, time
+path = pathlib.Path(sys.argv[1])
+snapshot = json.loads(path.read_text())
+assert time.time() - path.stat().st_mtime < 15
+assert snapshot['type'] == sys.argv[2]
+assert isinstance(snapshot['powered'], bool)
+if sys.argv[2] == 'wifi':
+    assert snapshot['networkMode'] in ('nat', 'bridged')
+    assert isinstance(snapshot['associated'], bool)
+else:
+    assert isinstance(snapshot['devices'], list)
+PYTHON
+  then ok "fresh Mac $integration snapshot from the host bridge"
+  else bad "missing, stale or invalid Mac $integration snapshot"; fi
+done
+for integration in wifi bluetooth; do
+  plugin="/home/$user/.config/omarchy/plugins/tryomarchy.host-$integration"
+  [[ $(readlink "$plugin") == "/usr/share/try-omarchy/host-$integration" ]] &&
+    ok "Mac $integration panel uses the installed package" || bad "Mac $integration panel has no installed plugin link"
+done
+
+if python3 -I - <<'PYTHON'
+import json
+from pathlib import Path
+report = json.loads(Path('/var/lib/try-omarchy/package-install.json').read_text())
+assert report['result'] in ('installed', 'current')
+progress = Path('/run/try-omarchy/update-progress.json')
+if progress.exists():
+    assert json.loads(progress.read_text())['done'] is True
+PYTHON
+then ok "integration update succeeds and its console indicator finishes"
+else bad "integration update failed or its console indicator did not finish"; fi
 
 # --- integrations ----------------------------------------------------------------------
 zone=$(timedatectl show -p Timezone --value)

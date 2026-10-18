@@ -255,6 +255,8 @@ guest test -e /var/lib/omarchy/provisioning/pending && miss "first-boot setup is
 hypr() { guest "ls /run/user/$uid/hypr/*/.socket.sock" >/dev/null 2>&1; }
 for _ in $(seq 1 90); do hypr && break; sleep 1; done
 hypr && pass "the desktop starts again on the second boot ($((SECONDS - boot_start)) s)" || miss "no desktop on the second boot"
+guest test ! -e /run/try-omarchy/update-progress.json && pass "unchanged integrations need no update spinner on the second boot" ||
+  miss "unchanged integrations unexpectedly started an update spinner"
 guest journalctl -b --no-pager >"$out/journal-2.txt" 2>&1 || true
 
 # --- results ----------------------------------------------------------------------------------
