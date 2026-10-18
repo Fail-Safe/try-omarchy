@@ -110,3 +110,14 @@ panel nits and physical frame pacing remain open. The earlier
 local integration and have not been remeasured on this factory. No new claim
 of hardware video decoding or sustained high-resolution playback is made.
 Future kernel/compositor source versions require explicit adaptation.
+
+## Repository snapshot timing
+
+The Try Omarchy source base remained `0ada4c1` through qualification. The
+rolling Omarchy edge package index advanced while testing ran (including a
+new Omarchy development runtime and Omawrite). The factory records the earlier
+repository digests and versions stated above; it is not claimed to contain
+every package published afterward. The ordinary freshness report exposes
+those differences. Its version-difference list also includes the intentional
+locally patched Hyprland package versus the repository package. Normal guest
+updates remain available; future graphics versions still need adaptation.

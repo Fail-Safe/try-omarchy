@@ -1,3 +1,8 @@
+> Historical brightness measurements from the earlier local integration.
+> Factory/upgrade integration has since been included and qualified; see the
+> [current integration record](native-opengl-hdr-integration.md). The tables
+> below have not been remeasured on the new factory.
+
 # HDR brightness validation — 2026-10-18
 
 These are local measurements of the accelerated Cocoa/OpenGL HDR prototype on
@@ -95,7 +100,7 @@ mpv build passed nine built-in tests; Hyprland compiled and its running binary
 matched the installed corrected package. These are local integration results,
 not automatically proof of this older draft branch's complete factory image.
 
-Still open: factory registration/package pin integration of these corrections,
+At that stage, remaining work included factory registration/package integration,
 exact native tone-curve matching, matched browser physical measurements,
 QuickTime–VM–QuickTime repeatability controls, other Macs/external displays,
 host sleep/wake and live HDR/SDR transitions, and physical frame pacing.
